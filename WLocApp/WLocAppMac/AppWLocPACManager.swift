@@ -42,10 +42,17 @@ final class AppWLocPACManager {
     private var fallbackPACReturn = "DIRECT"
     private var isRunning = false
 
-    func lock(to place: AppWLocPlace, completion: @escaping (Result<Void, Error>) -> Void) {
+    /// 保存本次选择的坐标和定位参数，代理已启动时也会更新锁定状态。
+    func lock(to place: AppWLocPlace, parameters: AppWLocLockParameters = AppWLocLockParameters(), completion: @escaping (Result<Void, Error>) -> Void) {
         do {
             let coordinate = AppWLocCoordinateTool.wlocResponseCoordinate(fromAppleMapCoordinate: place.coordinate)
-            try AppWLocStateStore.shared.lock(latitude: coordinate.latitude, longitude: coordinate.longitude)
+            try AppWLocStateStore.shared.lock(
+                latitude: coordinate.latitude,
+                longitude: coordinate.longitude,
+                altitude: parameters.altitude,
+                horizontalAccuracy: parameters.horizontalAccuracy,
+                verticalAccuracy: parameters.verticalAccuracy
+            )
         } catch {
             completion(.failure(error))
             return

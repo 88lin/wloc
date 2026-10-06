@@ -82,6 +82,7 @@ final class WLocMacTutorialViewController: NSViewController {
         addTitle("二、锁定位置")
         addStep("1. 在主界面搜索地点，或拖动地图到目标位置。")
         addStep("2. 点击“锁定位置”，应用会启用本地定位代理，并配置系统 PAC。")
+        addStep("如需设置海拔、水平精度和垂直精度，点击“高级锁定”；“查询海拔”可填入当前选点的海拔，也可手动修改。")
         addStep("3. 打开系统定位服务，关闭后等待两秒再打开。")
 
         let line = NSView()
@@ -91,8 +92,11 @@ final class WLocMacTutorialViewController: NSViewController {
         }
 
         addTitle("三、恢复原始位置")
-        addStep("1. 点击主界面的“恢复定位”恢复原代理设置；若提示失败，请点击“重试恢复”。退出应用也会尝试恢复。")
+        addStep("1. 点击主界面的“还原定位”恢复原代理设置；若提示失败，请点击“重试恢复”。退出应用也会尝试恢复。如连接了 VPN，请先关闭。")
         addStep("2. 再次关开定位服务。如未恢复，重启电脑后再试。")
+
+        addTitle("四、检查更新")
+        addStep("点击版本旁的“检查更新”或应用菜单中的“检查更新…”。发现新版后点击“下载并安装”，应用会显示下载进度，安装完成后自动重启。应用目录不可写时，系统会请求管理员授权。")
     }
 
     private func addTitle(_ text: String) {

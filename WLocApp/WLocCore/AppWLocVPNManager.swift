@@ -29,7 +29,8 @@ final class AppWLocVPNManager {
         self.localizedDescription = "\(localizedDescription ?? AppWLocConfig.displayName)-App VPN"
     }
 
-    func lock(to place: AppWLocPlace, completion: @escaping (Result<Void, Error>) -> Void) {
+    /// 保存本次选择的坐标和定位参数，再启动现有 VPN 流程。
+    func lock(to place: AppWLocPlace, parameters: AppWLocLockParameters = AppWLocLockParameters(), completion: @escaping (Result<Void, Error>) -> Void) {
         do {
             let responseCoordinate = AppWLocCoordinateTool.wlocResponseCoordinate(fromAppleMapCoordinate: place.coordinate)
             AppWLocUtils.debugLog(
@@ -37,7 +38,10 @@ final class AppWLocVPNManager {
             )
             try AppWLocStateStore.shared.lock(
                 latitude: responseCoordinate.latitude,
-                longitude: responseCoordinate.longitude
+                longitude: responseCoordinate.longitude,
+                altitude: parameters.altitude,
+                horizontalAccuracy: parameters.horizontalAccuracy,
+                verticalAccuracy: parameters.verticalAccuracy
             )
         } catch {
             AppWLocUtils.debugLog("\(AppWLocConfig.displayName) 锁定坐标保存失败：\(error.localizedDescription)")

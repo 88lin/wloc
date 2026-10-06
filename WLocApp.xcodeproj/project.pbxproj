@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        A60000000000000000000001 /* WLocMacUpdateInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000002 /* WLocMacUpdateInstaller.swift */; };
 		00580BB756C67F2C1F5E53C6 /* WLocGlassView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDA7C6210F55F1EA98FC78D7 /* WLocGlassView.swift */; };
 		01C4576B60B3AF0CB490F5B6 /* AppWLocARPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9F9939D7325F27176EA3A51 /* AppWLocARPC.swift */; };
 		05C034B4E8166C14BCEE1888 /* PacketTunnelProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C53079214FE279F94DE9C9 /* PacketTunnelProvider.swift */; };
@@ -132,6 +133,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+        A60000000000000000000002 /* WLocMacUpdateInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WLocMacUpdateInstaller.swift; sourceTree = "<group>"; };
 		085DE08A9C0C3F6E05FE6B1E /* Pods-WLocTunnel-iOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-WLocTunnel-iOS.debug.xcconfig"; path = "Target Support Files/Pods-WLocTunnel-iOS/Pods-WLocTunnel-iOS.debug.xcconfig"; sourceTree = "<group>"; };
 		086D0B98BDC3BC6E4313F191 /* AppWLocModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppWLocModels.swift; sourceTree = "<group>"; };
 		0F8E81DBA996BB34785BA97E /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -323,6 +325,7 @@
 		6A9998856E8E4C32B052DE06 /* WLocAppMac */ = {
 			isa = PBXGroup;
 			children = (
+				A60000000000000000000002 /* WLocMacUpdateInstaller.swift */,
 				9E4C119302B8442C81F711B0 /* main.swift */,
 				15154B3AEF11D8A920DCA5C1 /* AppDelegate.swift */,
 				12D95F7773BD11BDF1CCC38D /* AppKitCompatibility.swift */,
@@ -729,6 +732,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A60000000000000000000001 /* WLocMacUpdateInstaller.swift in Sources */,
 				01C4576B60B3AF0CB490F5B6 /* AppWLocARPC.swift in Sources */,
 				BFE3F17AEE9D306486BE67F8 /* AppWLocCertificateStore.swift in Sources */,
 				21FC421027345655463543CE /* AppWLocConfig.swift in Sources */,

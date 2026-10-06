@@ -18,7 +18,8 @@ enum AppWLocPrivilegedHelperConstants {
         return "\(baseRequirement) and certificate leaf[subject.OU] = \"\(teamIdentifier)\""
     }
 
-    private static var currentTeamIdentifier: String? {
+    /// 复用当前签名团队，供 Helper 通信和在线安装校验共同使用。
+    static var currentTeamIdentifier: String? {
         var code: SecCode?
         guard SecCodeCopySelf([], &code) == errSecSuccess,
               let code else {

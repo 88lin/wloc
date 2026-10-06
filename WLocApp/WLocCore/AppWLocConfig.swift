@@ -145,6 +145,9 @@ struct AppWLocAvailableUpdate {
     let version: String
     let releasePageURL: URL
     let downloadURL: URL
+    let assetName: String?
+    let assetSize: Int64?
+    let assetDigest: String?
 }
 
 enum AppWLocUpdateCheckResult {
@@ -160,10 +163,13 @@ final class AppWLocUpdateChecker {
         struct Asset: Decodable {
             let name: String
             let browserDownloadURL: URL
+            let size: Int64?
+            let digest: String?
 
             enum CodingKeys: String, CodingKey {
                 case name
                 case browserDownloadURL = "browser_download_url"
+                case size, digest
             }
         }
 
@@ -194,12 +200,14 @@ final class AppWLocUpdateChecker {
 
     private init() {}
 
+    /// 查询最新正式发布；Mac 遇到 API 限流时改读同一仓库的官方发布页。
     func check(platform: AppWLocReleasePlatform, completion: @escaping (AppWLocUpdateCheckResult) -> Void) {
         let endpoint = URL(string: "https://api.github.com/repos/\(AppWLocConfig.githubRepository)/releases/latest")!
         var request = URLRequest(url: endpoint)
         request.timeoutInterval = 15
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("WLoc8.com/\(AppWLocConfig.currentVersion)", forHTTPHeaderField: "User-Agent")
+        request.cachePolicy = .reloadIgnoringLocalCacheData
 
         URLSession.shared.dataTask(with: request) { data, response, error in
             let result: AppWLocUpdateCheckResult
@@ -207,6 +215,10 @@ final class AppWLocUpdateChecker {
                 result = .failure(error)
             } else if let httpResponse = response as? HTTPURLResponse,
                       !(200...299).contains(httpResponse.statusCode) {
+                if platform == .macOS, [403, 429].contains(httpResponse.statusCode) {
+                    self.checkMacReleasePage(completion: completion)
+                    return
+                }
                 result = .failure(CheckError.serverStatus(httpResponse.statusCode))
             } else if let data = data,
                       let release = try? JSONDecoder().decode(GitHubRelease.self, from: data) {
@@ -214,14 +226,17 @@ final class AppWLocUpdateChecker {
                 if Self.isVersion(latestVersion, newerThan: AppWLocConfig.currentVersion) {
                     // 优先直达当前平台的安装包；Release 未上传对应资产时回退到发布页，避免按钮失效。
                     let preferredExtension = platform == .macOS ? ".dmg" : ".ipa"
-                    let assetURL = release.assets.first {
+                    let asset = release.assets.first {
                         $0.name.lowercased().hasSuffix(preferredExtension)
-                    }?.browserDownloadURL
+                    }
                     result = .updateAvailable(
                         AppWLocAvailableUpdate(
                             version: latestVersion,
                             releasePageURL: release.htmlURL,
-                            downloadURL: assetURL ?? release.htmlURL
+                            downloadURL: asset?.browserDownloadURL ?? release.htmlURL,
+                            assetName: asset?.name,
+                            assetSize: asset?.size,
+                            assetDigest: asset?.digest
                         )
                     )
                 } else {
@@ -237,11 +252,69 @@ final class AppWLocUpdateChecker {
         }.resume()
     }
 
-    private static func normalizedVersion(_ version: String) -> String {
+    /// 从 GitHub 的 latest 跳转取得正式版本，再从对应下载列表读取 DMG 和 SHA-256。
+    private func checkMacReleasePage(completion: @escaping (AppWLocUpdateCheckResult) -> Void) {
+        let latestURL = AppWLocConfig.githubRepositoryURL.appendingPathComponent("releases/latest")
+        var request = URLRequest(url: latestURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
+        request.setValue("WLoc8.com", forHTTPHeaderField: "User-Agent")
+        URLSession.shared.dataTask(with: request) { _, response, error in
+            let finish: (AppWLocUpdateCheckResult) -> Void = { result in DispatchQueue.main.async { completion(result) } }
+            guard error == nil, let response = response as? HTTPURLResponse, response.statusCode == 200,
+                  let pageURL = response.url, pageURL.host == "github.com",
+                  pageURL.path.hasPrefix("/\(AppWLocConfig.githubRepository)/releases/tag/") else {
+                finish(.failure(error ?? CheckError.invalidResponse))
+                return
+            }
+            let version = Self.normalizedVersion(pageURL.lastPathComponent)
+            guard Self.isVersion(version, newerThan: AppWLocConfig.currentVersion) else {
+                finish(.upToDate(latestVersion: version))
+                return
+            }
+            let assetsURL = AppWLocConfig.githubRepositoryURL.appendingPathComponent("releases/expanded_assets").appendingPathComponent(pageURL.lastPathComponent)
+            URLSession.shared.dataTask(with: URLRequest(url: assetsURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)) { data, response, error in
+                guard error == nil, let response = response as? HTTPURLResponse, response.statusCode == 200,
+                      let data, let html = String(data: data, encoding: .utf8) else {
+                    finish(.failure(error ?? CheckError.invalidResponse))
+                    return
+                }
+                // 只解析下载资产所在的列表项，不依赖发布正文或页面上的其他链接。
+                let items = html.components(separatedBy: "<li ")
+                let linkPattern = #"href="([^"]+\.dmg)""#
+                let digestPattern = #"sha256:([a-fA-F0-9]{64})"#
+                var downloadURL = pageURL
+                var digest: String?
+                for item in items {
+                    guard let path = Self.firstCapture(linkPattern, in: item),
+                          path.hasPrefix("/\(AppWLocConfig.githubRepository)/releases/download/"),
+                          let url = URL(string: path, relativeTo: AppWLocConfig.githubRepositoryURL)?.absoluteURL else { continue }
+                    downloadURL = url
+                    digest = Self.firstCapture(digestPattern, in: item).map { "sha256:\($0)" }
+                    break
+                }
+                finish(.updateAvailable(AppWLocAvailableUpdate(
+                    version: version, releasePageURL: pageURL, downloadURL: downloadURL,
+                    assetName: downloadURL == pageURL ? nil : downloadURL.lastPathComponent,
+                    assetSize: nil, assetDigest: digest
+                )))
+            }.resume()
+        }.resume()
+    }
+
+    /// 读取固定格式中的单个字段，匹配不到时交给调用方处理。
+    private static func firstCapture(_ pattern: String, in text: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let range = Range(match.range(at: 1), in: text) else { return nil }
+        return String(text[range])
+    }
+
+    /// 去掉发布标签前的 v，供检查更新和安装包版本校验共用。
+    static func normalizedVersion(_ version: String) -> String {
         version.trimmingCharacters(in: CharacterSet(charactersIn: "vV "))
     }
 
-    private static func isVersion(_ candidate: String, newerThan current: String) -> Bool {
+    /// 按数字段比较版本，同时容许 1.2 和 1.2.0 这种等价写法。
+    static func isVersion(_ candidate: String, newerThan current: String) -> Bool {
         // 按数字段比较版本，避免系统的字符串比较把 1.10 误判为小于 1.9。
         let separators = CharacterSet.decimalDigits.inverted
         let candidateParts = normalizedVersion(candidate).components(separatedBy: separators).compactMap(Int.init)

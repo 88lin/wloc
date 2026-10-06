@@ -26,6 +26,8 @@ final class WLocMapViewController: UIViewController {
     private let detailLabel = UILabel()
     private let coordinateLabel = UILabel()
     private let lockButton = WLocGlassButton(title: "锁定位置", style: .primary)
+    private let advancedLockButton = WLocGlassButton(title: "高级锁定", style: .secondary)
+    private let restoreButton = WLocGlassButton(title: "还原定位", style: .secondary)
     private let favoriteButton = WLocGlassButton(title: "收藏", style: .secondary)
     private let favoritesButton = WLocGlassButton(title: "收藏夹", style: .secondary)
     private let coordinateInputButton = WLocGlassButton(title: "经纬度", style: .secondary)
@@ -47,6 +49,7 @@ final class WLocMapViewController: UIViewController {
     private var shouldCenterOnUserLocation = false
     private var lastUserCoordinate: CLLocationCoordinate2D?
     private var availableUpdate: AppWLocAvailableUpdate?
+    private var isLocking = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -132,6 +135,8 @@ final class WLocMapViewController: UIViewController {
         coordinateLabel.numberOfLines = 1
 
         lockButton.addTarget(self, action: #selector(lockCurrentPlace), for: .touchUpInside)
+        advancedLockButton.addTarget(self, action: #selector(openAdvancedLock), for: .touchUpInside)
+        restoreButton.addTarget(self, action: #selector(restoreLocation), for: .touchUpInside)
         favoriteButton.addTarget(self, action: #selector(addFavorite), for: .touchUpInside)
         favoritesButton.addTarget(self, action: #selector(openFavorites), for: .touchUpInside)
         coordinateInputButton.addTarget(self, action: #selector(openCoordinateInput), for: .touchUpInside)
@@ -232,6 +237,11 @@ final class WLocMapViewController: UIViewController {
             make.bottom.equalTo(view.safeAreaLayoutGuide)
         }
 
+        let actionRow = UIStackView(arrangedSubviews: [lockButton, advancedLockButton, restoreButton])
+        actionRow.axis = .horizontal
+        actionRow.spacing = 8
+        actionRow.distribution = .fillEqually
+
         let secondaryRow = UIStackView(arrangedSubviews: [favoriteButton, favoritesButton, coordinateInputButton, tutorialButton])
         secondaryRow.axis = .horizontal
         secondaryRow.spacing = 10
@@ -248,14 +258,14 @@ final class WLocMapViewController: UIViewController {
         versionRow.spacing = 8
         versionRow.alignment = .center
 
-        let stack = UIStackView(arrangedSubviews: [titleLabel, detailLabel, coordinateLabel, lockButton, secondaryRow, externalLinkRow, versionRow])
+        let stack = UIStackView(arrangedSubviews: [titleLabel, detailLabel, coordinateLabel, actionRow, secondaryRow, externalLinkRow, versionRow])
         stack.axis = .vertical
         stack.spacing = 10
         bottomGlass.contentView.addSubview(stack)
         stack.snp.makeConstraints { make in
             make.edges.equalToSuperview().inset(18)
         }
-        lockButton.snp.makeConstraints { make in
+        actionRow.snp.makeConstraints { make in
             make.height.equalTo(50)
         }
         secondaryRow.snp.makeConstraints { make in
@@ -290,6 +300,8 @@ final class WLocMapViewController: UIViewController {
         coordinateLabel.text = "未选择坐标"
         lockButton.isEnabled = false
         lockButton.alpha = 0.55
+        advancedLockButton.isEnabled = false
+        advancedLockButton.alpha = 0.55
         favoriteButton.isEnabled = false
         favoriteButton.alpha = 0.55
         favoriteButton.setTitle("收藏", for: .normal)
@@ -300,8 +312,10 @@ final class WLocMapViewController: UIViewController {
         titleLabel.text = place.name
         detailLabel.text = place.detail.isEmpty ? "正在获取地址..." : place.detail
         coordinateLabel.text = place.coordinateText
-        lockButton.isEnabled = true
-        lockButton.alpha = 1
+        lockButton.isEnabled = !isLocking
+        lockButton.alpha = isLocking ? 0.7 : 1
+        advancedLockButton.isEnabled = !isLocking
+        advancedLockButton.alpha = isLocking ? 0.7 : 1
         favoriteButton.isEnabled = !AppWLocFavoriteStore.shared.contains(place)
         favoriteButton.alpha = favoriteButton.isEnabled ? 1 : 0.58
         favoriteButton.setTitle(favoriteButton.isEnabled ? "收藏" : "已收藏", for: .normal)
@@ -571,12 +585,34 @@ final class WLocMapViewController: UIViewController {
             showMessage("请选择位置", "请先单击地图或搜索地点。")
             return
         }
-        lock(place, successMessage: "锁定成功，请确保已【下载并信任证书】，并手动打开 设置 -> 隐私与安全性 -> 关开定位服务。")
+        lock(place)
     }
 
-    private func lock(_ place: AppWLocPlace, successMessage: String) {
+    @objc private func openAdvancedLock() {
+        guard let place = selectedPlace, !isLocking else { return }
+        view.endEditing(true)
+        let controller = WLocAdvancedLockViewController(place: place) { [weak self] parameters in
+            self?.lock(place, parameters: parameters)
+        }
+        let navigation = UINavigationController(rootViewController: controller)
+        navigation.modalPresentationStyle = .formSheet
+        present(navigation, animated: true)
+    }
+
+    @objc private func restoreLocation() {
+        view.endEditing(true)
+        showMessage("还原定位", "请先关闭 VPN，然后前往“设置 → 隐私与安全性 → 定位服务”，关闭定位服务，等待 2 秒后重新开启，以刷新实际位置。")
+    }
+
+    /// 普通锁定和高级锁定共用 VPN 流程，只传入不同的定位参数。
+    private func lock(
+        _ place: AppWLocPlace,
+        parameters: AppWLocLockParameters = AppWLocLockParameters(),
+        successMessage: String = "锁定成功，请确保已下载并信任证书，然后前往“设置 → 隐私与安全性 → 定位服务”，关闭定位服务，等待 2 秒后重新开启。"
+    ) {
+        guard !isLocking else { return }
         setBusy(true, title: "锁定中...")
-        vpnManager.lock(to: place) { [weak self] result in
+        vpnManager.lock(to: place, parameters: parameters) { [weak self] result in
             AppWLocUtils.mainThread {
                 guard let self = self else { return }
                 self.setBusy(false, title: "锁定位置")
@@ -728,15 +764,186 @@ final class WLocMapViewController: UIViewController {
     }
 
     private func setBusy(_ busy: Bool, title: String) {
-        lockButton.isEnabled = !busy
+        isLocking = busy
+        lockButton.isEnabled = !busy && selectedPlace != nil
         lockButton.alpha = busy ? 0.7 : 1
         lockButton.setTitle(title, for: .normal)
+        advancedLockButton.isEnabled = lockButton.isEnabled
+        advancedLockButton.alpha = lockButton.alpha
+        restoreButton.isEnabled = !busy
     }
 
     private func showMessage(_ title: String, _ message: String) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "好", style: .default))
         present(alert, animated: true)
+    }
+}
+
+private final class WLocAdvancedLockViewController: UIViewController {
+    private let place: AppWLocPlace
+    private let onLock: (AppWLocLockParameters) -> Void
+    private let altitudeField = UITextField()
+    private let horizontalField = UITextField()
+    private let verticalField = UITextField()
+    private let queryButton = WLocGlassButton(title: "查询海拔", style: .secondary)
+    private let lockButton = WLocGlassButton(title: "锁定位置", style: .primary)
+    private let statusLabel = UILabel()
+    private var elevationTask: URLSessionDataTask?
+
+    init(place: AppWLocPlace, onLock: @escaping (AppWLocLockParameters) -> Void) {
+        self.place = place
+        self.onLock = onLock
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    deinit { elevationTask?.cancel() }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "高级锁定"
+        view.backgroundColor = UIColor(white: 0.97, alpha: 1)
+        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "取消", style: .plain, target: self, action: #selector(close))
+
+        // 坐标固定为打开表单时选中的位置，查询海拔和最终锁定使用同一个点。
+        let parameters = AppWLocLockParameters(state: AppWLocStateStore.shared.load())
+        altitudeField.text = NSNumber(value: parameters.altitude).stringValue
+        horizontalField.text = String(parameters.horizontalAccuracy)
+        verticalField.text = String(parameters.verticalAccuracy)
+        altitudeField.keyboardType = .numbersAndPunctuation
+        horizontalField.keyboardType = .numberPad
+        verticalField.keyboardType = .numberPad
+
+        let toolbar = UIToolbar()
+        toolbar.items = [
+            UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil),
+            UIBarButtonItem(title: "完成", style: .done, target: self, action: #selector(endEditing))
+        ]
+        toolbar.sizeToFit()
+        [altitudeField, horizontalField, verticalField].forEach { $0.inputAccessoryView = toolbar }
+        queryButton.addTarget(self, action: #selector(queryElevation), for: .touchUpInside)
+        lockButton.addTarget(self, action: #selector(confirmLock), for: .touchUpInside)
+        statusLabel.font = .systemFont(ofSize: 13)
+        statusLabel.textColor = .darkGray
+        statusLabel.numberOfLines = 0
+
+        let coordinates = UIStackView(arrangedSubviews: [
+            coordinateView(title: "纬度", value: String(format: "%.7f", place.latitude)),
+            coordinateView(title: "经度", value: String(format: "%.7f", place.longitude))
+        ])
+        coordinates.axis = .horizontal
+        coordinates.spacing = 12
+        coordinates.distribution = .fillEqually
+
+        let scrollView = UIScrollView()
+        scrollView.keyboardDismissMode = .interactive
+        view.addSubview(scrollView)
+        view.addSubview(lockButton)
+        let stack = UIStackView(arrangedSubviews: [
+            label("当前选择", heading: true), coordinates, label("定位参数", heading: true),
+            parameterView(title: "海拔高度（m）", field: altitudeField), queryButton,
+            parameterView(title: "水平精度（m，非负整数）", field: horizontalField),
+            parameterView(title: "垂直精度（m，非负整数）", field: verticalField), statusLabel
+        ])
+        stack.axis = .vertical
+        stack.spacing = 16
+        scrollView.addSubview(stack)
+        lockButton.snp.makeConstraints { make in
+            make.leading.trailing.equalTo(view.safeAreaLayoutGuide).inset(20)
+            make.bottom.equalTo(view.safeAreaLayoutGuide).inset(16)
+            make.height.equalTo(50)
+        }
+        scrollView.snp.makeConstraints { make in
+            make.top.leading.trailing.equalTo(view.safeAreaLayoutGuide)
+            make.bottom.equalTo(lockButton.snp.top).offset(-16)
+        }
+        stack.snp.makeConstraints { make in
+            make.edges.equalTo(scrollView.contentLayoutGuide).inset(20)
+            make.width.equalTo(scrollView.frameLayoutGuide).offset(-40)
+        }
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        elevationTask?.cancel()
+        elevationTask = nil
+    }
+
+    private func label(_ text: String, heading: Bool = false) -> UILabel {
+        let label = UILabel()
+        label.text = text
+        label.font = .systemFont(ofSize: heading ? 19 : 14, weight: .semibold)
+        label.textColor = heading ? .black : .darkGray
+        label.numberOfLines = 0
+        return label
+    }
+
+    private func coordinateView(title: String, value: String) -> UIView {
+        let stack = UIStackView(arrangedSubviews: [label(title), label(value)])
+        stack.axis = .vertical
+        stack.spacing = 8
+        return stack
+    }
+
+    private func parameterView(title: String, field: UITextField) -> UIView {
+        field.font = .systemFont(ofSize: 20)
+        field.textColor = .black
+        field.backgroundColor = .white
+        field.borderStyle = .roundedRect
+        field.clearButtonMode = .whileEditing
+        field.autocorrectionType = .no
+        field.accessibilityLabel = title
+        field.snp.makeConstraints { make in make.height.equalTo(48) }
+        let stack = UIStackView(arrangedSubviews: [label(title), field])
+        stack.axis = .vertical
+        stack.spacing = 8
+        return stack
+    }
+
+    @objc private func endEditing() { view.endEditing(true) }
+
+    @objc private func close() { dismiss(animated: true) }
+
+    @objc private func queryElevation() {
+        view.endEditing(true)
+        queryButton.isEnabled = false
+        queryButton.setTitle("查询中…", for: .normal)
+        statusLabel.text = nil
+        let coordinate = AppWLocCoordinateTool.wlocResponseCoordinate(fromAppleMapCoordinate: place.coordinate)
+        elevationTask = AppWLocElevationQuery.query(latitude: coordinate.latitude, longitude: coordinate.longitude) { [weak self] result in
+            guard let self, self.elevationTask != nil else { return }
+            self.elevationTask = nil
+            self.queryButton.isEnabled = true
+            self.queryButton.setTitle("查询海拔", for: .normal)
+            switch result {
+            case .success(let elevation):
+                self.altitudeField.text = NSNumber(value: elevation).stringValue
+                self.statusLabel.textColor = .darkGray
+                self.statusLabel.text = "已填入查询海拔，可继续手动修改。"
+            case .failure(let error):
+                self.statusLabel.textColor = .red
+                self.statusLabel.text = error.localizedDescription
+            }
+        }
+    }
+
+    @objc private func confirmLock() {
+        do {
+            let parameters = try AppWLocLockParameters(
+                altitudeText: altitudeField.text ?? "",
+                horizontalAccuracyText: horizontalField.text ?? "",
+                verticalAccuracyText: verticalField.text ?? ""
+            )
+            elevationTask?.cancel()
+            elevationTask = nil
+            view.endEditing(true)
+            dismiss(animated: true) { [onLock] in onLock(parameters) }
+        } catch {
+            statusLabel.textColor = .red
+            statusLabel.text = error.localizedDescription
+        }
     }
 }
 

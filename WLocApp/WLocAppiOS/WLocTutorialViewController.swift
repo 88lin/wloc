@@ -52,10 +52,11 @@ final class WLocTutorialViewController: UIViewController {
         addTitle("二、锁定位置")
         addStep("1. 回到地图页，搜索地点或拖动地图到目标位置。")
         addStep("2. 点击“锁定位置”，系统会自动添加或启动 \(AppWLocConfig.displayName) VPN。")
+        addStep("如需设置海拔、水平精度和垂直精度，点击“高级锁定”；“查询海拔”可填入当前选点的海拔，也可手动修改。")
         addStep("3. 进入系统定位服务，关闭后等待两秒再打开。")
 
         addTitle("三、恢复原始位置")
-        addStep("1. 退出应用会自动断开 \(AppWLocConfig.displayName) VPN。")
+        addStep("1. 点击“还原定位”查看操作指引，先关闭 VPN。")
         addStep("2. 再次关开系统定位服务。如未恢复，重启设备后再试。")
     }
 

@@ -25,7 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        
+        if mapController?.deferTerminationForUpdate() == true { return .terminateCancel }
         return .terminateNow
     }
     

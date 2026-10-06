@@ -126,7 +126,8 @@ final class WLocMacMapViewController: NSViewController {
     private let detailLabel = NSTextField.wlocLabel("")
     private let coordinateLabel = NSTextField.wlocLabel("")
     private let lockButton = NSButton.wlocButton("锁定位置")
-    private let restoreButton = NSButton.wlocButton("恢复定位")
+    private let advancedLockButton = NSButton.wlocButton("高级锁定")
+    private let restoreButton = NSButton.wlocButton("还原定位")
     private let favoriteButton = NSButton.wlocButton("加入收藏")
     private let coordinateInputButton = NSButton.wlocButton("经纬度选点")
     private let tutorialButton = NSButton.wlocButton("教程与证书")
@@ -155,6 +156,12 @@ final class WLocMacMapViewController: NSViewController {
     private weak var controlsPanel: NSView?
     private var outsideSearchClickMonitor: Any?
     private var availableUpdate: AppWLocAvailableUpdate?
+    private var updateInstaller: WLocMacUpdateInstaller?
+    private var updateProgressAlert: NSAlert?
+    private var isCheckingUpdates = false
+    private var isUpdating = false
+    private var isInstallingUpdate = false
+    private var shouldQuitAfterUpdateCancellation = false
     private var shouldSelectNextLocationUpdate = false
     private var isRefreshingLocationAfterLock = false
     private var isChangingLocation = false
@@ -244,7 +251,7 @@ final class WLocMacMapViewController: NSViewController {
         appNameLabel.font = .systemFont(ofSize: 18, weight: .bold)
         versionLabel.font = .systemFont(ofSize: 11, weight: .medium)
         versionLabel.textColor = .secondaryLabelColor
-        updateButton.isHidden = true
+        setUpdateButtonTitle("检查更新")
         updateButton.isBordered = false
         updateButton.font = .systemFont(ofSize: 11, weight: .semibold)
         updateButton.wantsLayer = true
@@ -272,7 +279,7 @@ final class WLocMacMapViewController: NSViewController {
         favoriteMenu.addItem(deleteItem)
         favoritesTable.menu = favoriteMenu
 
-        [lockButton, restoreButton, favoriteButton, coordinateInputButton, tutorialButton, telegramButton, githubButton].forEach {
+        [lockButton, advancedLockButton, restoreButton, favoriteButton, coordinateInputButton, tutorialButton, telegramButton, githubButton].forEach {
             $0.bezelStyle = .rounded
             $0.controlSize = .regular
         }
@@ -293,6 +300,8 @@ final class WLocMacMapViewController: NSViewController {
         restoreButton.action = #selector(restoreLocation)
         lockButton.target = self
         lockButton.action = #selector(lockCurrentPlace)
+        advancedLockButton.target = self
+        advancedLockButton.action = #selector(openAdvancedLock)
         favoriteButton.target = self
         favoriteButton.action = #selector(addFavorite)
         coordinateInputButton.target = self
@@ -389,7 +398,7 @@ final class WLocMacMapViewController: NSViewController {
         favoritesScroll.hasVerticalScroller = true
         favoritesScroll.borderType = .noBorder
 
-        let actionStack = NSStackView(views: [lockButton, restoreButton])
+        let actionStack = NSStackView(views: [lockButton, advancedLockButton, restoreButton])
         actionStack.orientation = .horizontal
         actionStack.spacing = 10
         actionStack.distribution = .fillEqually
@@ -413,7 +422,7 @@ final class WLocMacMapViewController: NSViewController {
             make.width.equalTo(secondaryActionStack)
         }
 
-        [lockButton, restoreButton, favoriteButton, coordinateInputButton, tutorialButton, telegramButton, githubButton].forEach { button in
+        [lockButton, advancedLockButton, restoreButton, favoriteButton, coordinateInputButton, tutorialButton, telegramButton, githubButton].forEach { button in
             button.snp.makeConstraints { make in
                 make.height.equalTo(36)
             }
@@ -639,12 +648,26 @@ final class WLocMacMapViewController: NSViewController {
     @objc private func lockCurrentPlace() {
         guard let place = selectedPlace else { return }
         guard canLockWithLocationServices() else { return }
+        lock(place)
+    }
+
+    @objc private func openAdvancedLock() {
+        guard let place = selectedPlace, !isChangingLocation else { return }
+        view.window?.makeFirstResponder(nil)
+        let controller = WLocMacAdvancedLockViewController(place: place) { [weak self] parameters in
+            guard let self, self.canLockWithLocationServices() else { return }
+            self.lock(place, parameters: parameters)
+        }
+        presentAsSheet(controller)
+    }
+
+    private var lockSuccessMessage: String {
         var msg = "锁定成功。请确认已通过“钥匙串访问”→“系统”→“文件”→“导入项目…”导入根证书并设为“始终信任”，然后关闭系统定位服务，等待两秒后再打开。"
         #if DEBUG
         let logPath = AppWLocUtils.debugLogURL?.path ?? "/tmp/AppWLoc/wloc-debug.log"
         msg += "\n\n调试日志：\(logPath)"
         #endif
-        lock(place, successMessage:msg)
+        return msg
     }
 
     private func canLockWithLocationServices() -> Bool {
@@ -685,19 +708,22 @@ final class WLocMacMapViewController: NSViewController {
         return false
     }
 
-    private func lock(_ place: AppWLocPlace, successMessage: String) {
+    /// 普通锁定和高级锁定共用代理流程，参数会一起写入锁定状态。
+    private func lock(_ place: AppWLocPlace, parameters: AppWLocLockParameters = AppWLocLockParameters(), successMessage: String? = nil) {
         guard !isChangingLocation else { return }
         isChangingLocation = true
         locationRefreshWorkItem?.cancel()
         restoreButton.isEnabled = false
         lockButton.isEnabled = false
+        advancedLockButton.isEnabled = false
         lockButton.title = "锁定中..."
-        pacManager.lock(to: place) { [weak self] result in
+        pacManager.lock(to: place, parameters: parameters) { [weak self] result in
             AppWLocUtils.mainThread {
                 guard let self else { return }
                 self.isChangingLocation = false
                 self.restoreButton.isEnabled = true
                 self.lockButton.isEnabled = true
+                self.advancedLockButton.isEnabled = true
                 switch result {
                 case .success:
                     self.lockButton.title = "锁定位置"
@@ -706,7 +732,7 @@ final class WLocMacMapViewController: NSViewController {
                     }
                     self.locationRefreshWorkItem = refresh
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: refresh)
-                    self.showAlert(title: "已锁定", message: successMessage)
+                    self.showAlert(title: "已锁定", message: successMessage ?? self.lockSuccessMessage)
                 case .failure(let error):
                     self.lockButton.title = "锁定位置"
                     self.showAlert(title: "启动失败", message: error.localizedDescription)
@@ -725,19 +751,21 @@ final class WLocMacMapViewController: NSViewController {
         locationManager.stopUpdatingLocation()
         restoreButton.isEnabled = false
         lockButton.isEnabled = false
-        restoreButton.title = "恢复中…"
+        advancedLockButton.isEnabled = false
+        restoreButton.title = "还原中…"
 
         pacManager.stop(clearState: true) { [weak self] error in
             guard let self else { return }
             self.isChangingLocation = false
             self.restoreButton.isEnabled = true
             self.lockButton.isEnabled = true
+            self.advancedLockButton.isEnabled = true
             if let error {
                 self.restoreButton.title = "重试恢复"
                 self.showAlert(title: "恢复失败", message: "原代理设置尚未全部恢复，请重试。\n\n\(error.localizedDescription)")
             } else {
-                self.restoreButton.title = "恢复定位"
-                self.showAlert(title: "已停止修改定位", message: "已恢复原代理设置。请关闭系统定位服务，等待两秒后重新开启，以刷新实际位置。")
+                self.restoreButton.title = "还原定位"
+                self.showAlert(title: "还原定位", message: "已恢复原代理设置。若连接了 VPN，请先关闭 VPN。然后前往“系统设置 → 隐私与安全性 → 定位服务”，关闭定位服务，等待 2 秒后重新开启，以刷新实际位置。")
             }
         }
     }
@@ -884,28 +912,29 @@ final class WLocMacMapViewController: NSViewController {
         }
     }
 
+    /// 启动时静默检查；用户主动检查发现新版时可直接下载并安装。
     func checkForUpdates(userInitiated: Bool) {
+        guard !isCheckingUpdates, !isUpdating else { return }
+        isCheckingUpdates = true
+        updateButton.isEnabled = false
         if userInitiated {
             versionLabel.stringValue = "正在检查更新…"
         }
         AppWLocUpdateChecker.shared.check(platform: .macOS) { [weak self] result in
             guard let self else { return }
+            self.isCheckingUpdates = false
+            self.updateButton.isEnabled = true
             self.versionLabel.stringValue = "版本 \(AppWLocConfig.currentVersion)"
             switch result {
             case .updateAvailable(let update):
                 self.availableUpdate = update
-                self.updateButton.attributedTitle = NSAttributedString(
-                    string: "更新 v\(update.version)",
-                    attributes: [
-                        .foregroundColor: NSColor(calibratedRed: 0.05, green: 0.45, blue: 0.96, alpha: 1),
-                        .font: NSFont.systemFont(ofSize: 11, weight: .semibold)
-                    ]
-                )
-                self.updateButton.toolTip = "下载 WLoc8.com v\(update.version)"
-                self.updateButton.isHidden = false
+                self.setUpdateButtonTitle("更新 v\(update.version)")
+                self.updateButton.toolTip = "下载并安装 WLoc8.com v\(update.version)"
+                if userInitiated { self.presentAvailableUpdate(update) }
             case .upToDate(let latestVersion):
                 self.availableUpdate = nil
-                self.updateButton.isHidden = true
+                self.setUpdateButtonTitle("检查更新")
+                self.updateButton.toolTip = "检查 GitHub Releases 中的新版本"
                 if userInitiated {
                     self.showAlert(title: "已是最新版本", message: "当前版本：\(AppWLocConfig.currentVersion)\n最新版本：\(latestVersion)")
                 }
@@ -920,8 +949,126 @@ final class WLocMacMapViewController: NSViewController {
     }
 
     @objc private func openAvailableUpdate() {
-        guard let availableUpdate else { return }
-        openExternalURL(availableUpdate.downloadURL)
+        if let availableUpdate {
+            presentAvailableUpdate(availableUpdate)
+        } else {
+            checkForUpdates(userInitiated: true)
+        }
+    }
+
+    private func setUpdateButtonTitle(_ title: String) {
+        updateButton.attributedTitle = NSAttributedString(string: title, attributes: [
+            .foregroundColor: NSColor(calibratedRed: 0.05, green: 0.45, blue: 0.96, alpha: 1),
+            .font: NSFont.systemFont(ofSize: 11, weight: .semibold)
+        ])
+    }
+
+    private func presentAvailableUpdate(_ update: AppWLocAvailableUpdate) {
+        guard !isUpdating, let window = view.window, window.attachedSheet == nil else { return }
+        let alert = NSAlert()
+        alert.messageText = "发现新版本 v\(update.version)"
+        let hasPackage = update.assetName?.lowercased().hasSuffix(".dmg") == true
+        alert.informativeText = "当前版本：\(AppWLocConfig.currentVersion)\n\n" + (hasPackage
+            ? "将从 GitHub 下载并安装新版本，完成后自动重启应用。更新会停止当前定位修改。"
+            : "该版本尚未提供 macOS 安装包，请前往发布页查看。")
+        alert.addButton(withTitle: hasPackage ? "下载并安装" : "查看发布页")
+        alert.addButton(withTitle: "稍后")
+        if hasPackage { alert.addButton(withTitle: "查看发布页") }
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard let self else { return }
+            if response == .alertFirstButtonReturn {
+                if hasPackage { self.downloadUpdate(update) } else { self.openExternalURL(update.releasePageURL) }
+            } else if response == .alertThirdButtonReturn {
+                self.openExternalURL(update.releasePageURL)
+            }
+        }
+    }
+
+    /// 下载期间禁用定位修改，并用可取消的弹窗显示下载和校验进度。
+    private func downloadUpdate(_ update: AppWLocAvailableUpdate) {
+        guard !isUpdating, !isChangingLocation, let window = view.window else { return }
+        do {
+            let installer = try WLocMacUpdateInstaller(update: update)
+            updateInstaller = installer
+            isUpdating = true
+            isChangingLocation = true
+            [lockButton, advancedLockButton, restoreButton, updateButton].forEach { $0.isEnabled = false }
+            let alert = NSAlert()
+            alert.messageText = "更新 v\(update.version)"
+            alert.informativeText = "正在连接下载服务…"
+            let indicator = NSProgressIndicator(frame: NSRect(x: 0, y: 0, width: 340, height: 18))
+            indicator.style = .bar
+            indicator.isIndeterminate = true
+            indicator.minValue = 0
+            indicator.maxValue = 1
+            indicator.startAnimation(nil)
+            alert.accessoryView = indicator
+            alert.addButton(withTitle: "取消")
+            updateProgressAlert = alert
+            alert.beginSheetModal(for: window) { [weak self] response in
+                guard let self, response == .alertFirstButtonReturn, self.isUpdating, !self.isInstallingUpdate else { return }
+                self.updateInstaller?.cancel()
+            }
+            installer.download(progress: { [weak alert, weak indicator] fraction, message in
+                alert?.informativeText = fraction.map { "\(message) \(Int($0 * 100))%" } ?? message
+                indicator?.isIndeterminate = fraction == nil
+                if let fraction { indicator?.doubleValue = fraction } else { indicator?.startAnimation(nil) }
+            }) { [weak self] result in
+                guard let self else { return }
+                switch result {
+                case .success:
+                    self.isInstallingUpdate = true
+                    self.updateProgressAlert?.buttons.first?.isEnabled = false
+                    self.updateProgressAlert?.informativeText = "正在停止定位修改并准备安装…"
+                    // 先恢复代理再退出，避免更新重启后系统继续使用已停止的定位代理。
+                    self.pacManager.stop(clearState: true) { [weak self] error in
+                        guard let self else { return }
+                        if let error { self.finishUpdate(error: error); return }
+                        self.updateInstaller?.install { [weak self] result in
+                            guard let self else { return }
+                            switch result {
+                            case .success:
+                                self.finishUpdate(error: nil)
+                                NSApp.terminate(nil)
+                            case .failure(let error): self.finishUpdate(error: error)
+                            }
+                        }
+                    }
+                case .failure(let error): self.finishUpdate(error: error)
+                }
+            }
+        } catch { showAlert(title: "更新失败", message: error.localizedDescription) }
+    }
+
+    /// 关闭进度弹窗并恢复按钮，取消不报错，安装失败保留当前版本。
+    private func finishUpdate(error: Error?) {
+        if error != nil { updateInstaller?.cancel() }
+        if let alert = updateProgressAlert { alert.window.sheetParent?.endSheet(alert.window, returnCode: .abort) }
+        updateProgressAlert = nil
+        updateInstaller = nil
+        isUpdating = false
+        isInstallingUpdate = false
+        isChangingLocation = false
+        [lockButton, advancedLockButton, restoreButton, updateButton].forEach { $0.isEnabled = true }
+        if shouldQuitAfterUpdateCancellation {
+            shouldQuitAfterUpdateCancellation = false
+            NSApp.terminate(nil)
+        } else if let error {
+            let cocoaError = error as NSError
+            let isCancelled = (error as? URLError)?.code == .cancelled
+                || (cocoaError.domain == NSCocoaErrorDomain && cocoaError.code == NSUserCancelledError)
+            if !isCancelled { showAlert(title: "更新失败", message: error.localizedDescription) }
+        }
+    }
+
+    /// 退出时先取消未完成的下载；安装完成后再退出，避免中断应用替换。
+    func deferTerminationForUpdate() -> Bool {
+        guard isUpdating else { return false }
+        if !isInstallingUpdate {
+            shouldQuitAfterUpdateCancellation = true
+            updateInstaller?.cancel()
+        }
+        return true
     }
 
     @objc private func zoomIn() {
@@ -1112,6 +1259,146 @@ final class WLocMacMapViewController: NSViewController {
             title: "无法打开系统设置",
             message: "请手动前往“系统设置”→“隐私与安全性”→“定位服务”。"
         )
+    }
+}
+
+private final class WLocMacAdvancedLockViewController: NSViewController {
+    private let place: AppWLocPlace
+    private let onLock: (AppWLocLockParameters) -> Void
+    private let altitudeField = NSTextField()
+    private let horizontalField = NSTextField()
+    private let verticalField = NSTextField()
+    private let queryButton = NSButton.wlocButton("查询海拔")
+    private let statusLabel = NSTextField.wlocWrappingLabel("")
+    private var elevationTask: URLSessionDataTask?
+
+    init(place: AppWLocPlace, onLock: @escaping (AppWLocLockParameters) -> Void) {
+        self.place = place
+        self.onLock = onLock
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    deinit { elevationTask?.cancel() }
+
+    override func loadView() {
+        view = NSView(frame: NSRect(x: 0, y: 0, width: 480, height: 470))
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        // 表单固定使用打开时选中的位置，避免查询和锁定落在不同的坐标上。
+        let parameters = AppWLocLockParameters(state: AppWLocStateStore.shared.load())
+        altitudeField.stringValue = NSNumber(value: parameters.altitude).stringValue
+        horizontalField.stringValue = String(parameters.horizontalAccuracy)
+        verticalField.stringValue = String(parameters.verticalAccuracy)
+
+        let heading = NSTextField.wlocLabel("高级锁定")
+        heading.font = .systemFont(ofSize: 21, weight: .semibold)
+        let coordinates = NSTextField.wlocWrappingLabel(String(format: "当前选择\n纬度：%.7f    经度：%.7f", place.latitude, place.longitude))
+        coordinates.font = .monospacedDigitSystemFont(ofSize: 13, weight: .regular)
+        coordinates.isSelectable = true
+        let parameterTitle = NSTextField.wlocLabel("定位参数（精度为非负整数）")
+        parameterTitle.font = .systemFont(ofSize: 14, weight: .semibold)
+        queryButton.target = self
+        queryButton.action = #selector(queryElevation)
+        statusLabel.font = .systemFont(ofSize: 12)
+        statusLabel.textColor = .secondaryLabelColor
+
+        let cancelButton = NSButton.wlocButton("取消")
+        cancelButton.target = self
+        cancelButton.action = #selector(close)
+        cancelButton.keyEquivalent = "\u{1b}"
+        let lockButton = NSButton.wlocButton("锁定位置")
+        lockButton.target = self
+        lockButton.action = #selector(confirmLock)
+        lockButton.keyEquivalent = "\r"
+        lockButton.bezelColor = .controlAccentColor
+        let actions = NSStackView(views: [cancelButton, lockButton])
+        actions.orientation = .horizontal
+        actions.distribution = .fillEqually
+        actions.spacing = 12
+
+        let stack = NSStackView(views: [
+            heading, coordinates, parameterTitle,
+            parameterRow(title: "海拔高度（m）", field: altitudeField), queryButton,
+            parameterRow(title: "水平精度（m）", field: horizontalField),
+            parameterRow(title: "垂直精度（m）", field: verticalField), statusLabel, actions
+        ])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 12
+        view.addSubview(stack)
+        stack.snp.makeConstraints { make in make.edges.equalToSuperview().inset(24) }
+        stack.arrangedSubviews.forEach { subview in
+            subview.snp.makeConstraints { make in make.width.equalTo(stack) }
+        }
+        statusLabel.snp.makeConstraints { make in make.height.greaterThanOrEqualTo(32) }
+        actions.snp.makeConstraints { make in make.height.equalTo(36) }
+    }
+
+    override func viewDidDisappear() {
+        super.viewDidDisappear()
+        elevationTask?.cancel()
+        elevationTask = nil
+    }
+
+    private func parameterRow(title: String, field: NSTextField) -> NSView {
+        let label = NSTextField.wlocLabel(title)
+        label.font = .systemFont(ofSize: 13)
+        field.font = .systemFont(ofSize: 16)
+        field.setAccessibilityLabel(title)
+        let row = NSStackView(views: [label, field])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 12
+        label.snp.makeConstraints { make in make.width.equalTo(120) }
+        field.snp.makeConstraints { make in make.height.equalTo(32) }
+        return row
+    }
+
+    @objc private func close() { dismiss(self) }
+
+    @objc private func queryElevation() {
+        view.window?.makeFirstResponder(nil)
+        queryButton.isEnabled = false
+        queryButton.title = "查询中…"
+        statusLabel.stringValue = ""
+        let coordinate = AppWLocCoordinateTool.wlocResponseCoordinate(fromAppleMapCoordinate: place.coordinate)
+        elevationTask = AppWLocElevationQuery.query(latitude: coordinate.latitude, longitude: coordinate.longitude) { [weak self] result in
+            guard let self, self.elevationTask != nil else { return }
+            self.elevationTask = nil
+            self.queryButton.isEnabled = true
+            self.queryButton.title = "查询海拔"
+            switch result {
+            case .success(let elevation):
+                self.altitudeField.stringValue = NSNumber(value: elevation).stringValue
+                self.statusLabel.textColor = .secondaryLabelColor
+                self.statusLabel.stringValue = "已填入查询海拔，可继续手动修改。"
+            case .failure(let error):
+                self.statusLabel.textColor = .systemRed
+                self.statusLabel.stringValue = error.localizedDescription
+            }
+        }
+    }
+
+    @objc private func confirmLock() {
+        view.window?.makeFirstResponder(nil)
+        do {
+            let parameters = try AppWLocLockParameters(
+                altitudeText: altitudeField.stringValue,
+                horizontalAccuracyText: horizontalField.stringValue,
+                verticalAccuracyText: verticalField.stringValue
+            )
+            elevationTask?.cancel()
+            elevationTask = nil
+            dismiss(self)
+            onLock(parameters)
+        } catch {
+            statusLabel.textColor = .systemRed
+            statusLabel.stringValue = error.localizedDescription
+        }
     }
 }
 
