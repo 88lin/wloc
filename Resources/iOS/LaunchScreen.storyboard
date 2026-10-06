@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="23072" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="wlc-LS-vc0">
+    <device id="retina6_1" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="23000"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <scenes>
+        <scene sceneID="wlc-LS-scn">
+            <objects>
+                <viewController id="wlc-LS-vc0" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="wlc-LS-root">
+                        <rect key="frame" x="0.0" y="0.0" width="390" height="844"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <view contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="wlc-LS-art">
+                                <rect key="frame" x="50.5" y="231.5" width="289" height="333"/>
+                                <subviews>
+                                    <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="LaunchIllustration" translatesAutoresizingMaskIntoConstraints="NO" id="wlc-LS-img">
+                                        <rect key="frame" x="0.0" y="0.0" width="289" height="289"/>
+                                        <constraints>
+                                            <constraint firstAttribute="height" secondItem="wlc-LS-img" secondAttribute="width" id="wlc-LS-square"/>
+                                        </constraints>
+                                    </imageView>
+                                    <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="WLoc8.com" textAlignment="center" lineBreakMode="tailTruncation" adjustsFontSizeToFit="YES" minimumScaleFactor="0.8" translatesAutoresizingMaskIntoConstraints="NO" id="wlc-LS-name">
+                                        <rect key="frame" x="0.0" y="293" width="289" height="40"/>
+                                        <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="30"/>
+                                        <color key="textColor" red="0.075" green="0.14" blue="0.19" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                                    </label>
+                                </subviews>
+                                <constraints>
+                                    <constraint firstItem="wlc-LS-img" firstAttribute="top" secondItem="wlc-LS-art" secondAttribute="top" id="wlc-LS-imgTop"/>
+                                    <constraint firstItem="wlc-LS-img" firstAttribute="leading" secondItem="wlc-LS-art" secondAttribute="leading" id="wlc-LS-imgLeft"/>
+                                    <constraint firstItem="wlc-LS-img" firstAttribute="trailing" secondItem="wlc-LS-art" secondAttribute="trailing" id="wlc-LS-imgRight"/>
+                                    <constraint firstItem="wlc-LS-name" firstAttribute="top" secondItem="wlc-LS-img" secondAttribute="bottom" constant="4" id="wlc-LS-nameTop"/>
+                                    <constraint firstItem="wlc-LS-name" firstAttribute="leading" secondItem="wlc-LS-art" secondAttribute="leading" id="wlc-LS-nameLeft"/>
+                                    <constraint firstItem="wlc-LS-name" firstAttribute="trailing" secondItem="wlc-LS-art" secondAttribute="trailing" id="wlc-LS-nameRight"/>
+                                    <constraint firstItem="wlc-LS-name" firstAttribute="bottom" secondItem="wlc-LS-art" secondAttribute="bottom" id="wlc-LS-nameBottom"/>
+                                    <constraint firstItem="wlc-LS-name" firstAttribute="height" constant="40" id="wlc-LS-nameHeight"/>
+                                    <constraint firstAttribute="width" relation="lessThanOrEqual" constant="300" id="wlc-LS-maxWidth"/>
+                                </constraints>
+                            </view>
+                        </subviews>
+                        <viewLayoutGuide key="safeArea" id="wlc-LS-safe"/>
+                        <color key="backgroundColor" red="0.9725" green="0.9765" blue="0.9647" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        <constraints>
+                            <constraint firstItem="wlc-LS-art" firstAttribute="centerX" secondItem="wlc-LS-root" secondAttribute="centerX" id="wlc-LS-centerX"/>
+                            <constraint firstItem="wlc-LS-art" firstAttribute="centerY" secondItem="wlc-LS-safe" secondAttribute="centerY" constant="-24" id="wlc-LS-centerY"/>
+                            <constraint firstItem="wlc-LS-art" firstAttribute="width" secondItem="wlc-LS-safe" secondAttribute="width" multiplier="0.74" priority="750" id="wlc-LS-width"/>
+                            <constraint firstItem="wlc-LS-art" firstAttribute="height" relation="lessThanOrEqual" secondItem="wlc-LS-safe" secondAttribute="height" multiplier="0.85" id="wlc-LS-maxHeight"/>
+                        </constraints>
+                    </view>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="wlc-LS-first" userLabel="First Responder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="0.0" y="0.0"/>
+        </scene>
+    </scenes>
+    <resources>
+        <image name="LaunchIllustration" width="1254" height="1254"/>
+    </resources>
+</document>

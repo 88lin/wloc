@@ -141,6 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSWorkspace.shared.open(URL(string: "https://t.me/wloc88")!)
     }
 
+    /// 顶部应用菜单和帮助菜单共用同一个检查更新入口。
     private func configureMainMenu() {
         let mainMenu = NSMenu(title: "MainMenu")
         NSApp.mainMenu = mainMenu
@@ -194,6 +195,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let helpMenu = addMenu("帮助", to: mainMenu)
         helpMenu.addItem(menuItem("教程与证书", action: #selector(showTutorial)))
+        helpMenu.addItem(menuItem("检查更新…", action: #selector(checkForUpdates)))
         helpMenu.addItem(.separator())
         helpMenu.addItem(menuItem("在 GitHub 上查看", action: #selector(openGitHub)))
         helpMenu.addItem(menuItem("加入 Telegram", action: #selector(openTelegram)))

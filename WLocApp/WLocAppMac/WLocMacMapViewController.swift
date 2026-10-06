@@ -52,7 +52,7 @@ private final class WLocMacLinkButton: NSButton {
         setButtonType(.momentaryChange)
         wantsLayer = true
         layer?.cornerRadius = 10
-        font = .systemFont(ofSize: 13, weight: .semibold)
+        font = .systemFont(ofSize: 12)
         alignment = .center
         imageScaling = .scaleProportionallyDown
         imagePosition = .imageLeading
@@ -89,17 +89,17 @@ private final class WLocMacLinkButton: NSButton {
         updateAppearance()
     }
 
+    /// 社区入口使用品牌底色和白色文字，鼠标经过时加深底色。
     private func updateAppearance() {
-        let alpha: CGFloat = isPointerInside ? 0.14 : 0.04
+        let alpha: CGFloat = isPointerInside ? 1 : 0.9
         layer?.backgroundColor = baseColor.withAlphaComponent(alpha).cgColor
         attributedTitle = NSAttributedString(
             string: title,
             attributes: [
-                .foregroundColor: NSColor.secondaryLabelColor,
-                .font: NSFont.systemFont(ofSize: 13, weight: .semibold)
+                .foregroundColor: NSColor.white,
             ]
         )
-        contentTintColor = .secondaryLabelColor
+        contentTintColor = .white
     }
 }
 
@@ -132,11 +132,11 @@ final class WLocMacMapViewController: NSViewController {
     private let coordinateInputButton = NSButton.wlocButton("经纬度选点")
     private let tutorialButton = NSButton.wlocButton("教程与证书")
     private let telegramButton = WLocMacLinkButton(
-        title: "Telegram",
+        title: "加入 Telegram",
         color: NSColor(calibratedRed: 0.13, green: 0.60, blue: 0.86, alpha: 1)
     )
     private let githubButton = WLocMacLinkButton(
-        title: "GitHub",
+        title: "GitHub · Star",
         color: NSColor(calibratedRed: 0.12, green: 0.14, blue: 0.18, alpha: 1)
     )
     private let appNameLabel = NSTextField.wlocLabel(AppWLocConfig.displayName)
@@ -283,10 +283,10 @@ final class WLocMacMapViewController: NSViewController {
             $0.bezelStyle = .rounded
             $0.controlSize = .regular
         }
-        telegramButton.image = WLocMacExternalIcon.image(named: "paperplane.fill", fallback: .telegram, size: NSSize(width: 17, height: 17))
+        telegramButton.image = WLocMacExternalIcon.image(named: "paperplane.fill", fallback: .telegram, size: NSSize(width: 14, height: 14))
         telegramButton.toolTip = "打开 Telegram: https://t.me/wloc88"
-        githubButton.image = WLocMacExternalIcon.image(named: "chevron.left.forwardslash.chevron.right", fallback: .code, size: NSSize(width: 17, height: 17))
-        githubButton.toolTip = "打开 WLoc8.com GitHub 项目"
+        githubButton.image = WLocMacExternalIcon.image(named: "chevron.left.forwardslash.chevron.right", fallback: .code, size: NSSize(width: 14, height: 14))
+        githubButton.toolTip = "查看 GitHub 开源项目，点个 Star 支持 WLoc8.com"
         [zoomInButton, zoomOutButton, currentLocationButton].forEach { button in
             if #available(macOS 26.0, *) {
                 button.bezelStyle = .glass
@@ -340,6 +340,7 @@ final class WLocMacMapViewController: NSViewController {
         table.backgroundColor = .clear
     }
 
+    /// 社区入口固定放在标题下方，收藏列表使用侧栏剩余空间。
     private func layoutViews() {
         let sidebar = WLocMacGlassView(cornerRadius: 28)
         let controlsPanel = WLocMacGlassView(cornerRadius: 8)
@@ -422,10 +423,13 @@ final class WLocMacMapViewController: NSViewController {
             make.width.equalTo(secondaryActionStack)
         }
 
-        [lockButton, advancedLockButton, restoreButton, favoriteButton, coordinateInputButton, tutorialButton, telegramButton, githubButton].forEach { button in
+        [lockButton, advancedLockButton, restoreButton, favoriteButton, coordinateInputButton, tutorialButton].forEach { button in
             button.snp.makeConstraints { make in
                 make.height.equalTo(36)
             }
+        }
+        [telegramButton, githubButton].forEach { button in
+            button.snp.makeConstraints { make in make.height.equalTo(30) }
         }
 
         [appNameLabel, versionLabel, updateButton, searchField, titleLabel, detailLabel, coordinateLabel, actionStack, secondaryActionStack, favoriteTitle, favoritesScroll, externalLinkStack].forEach {
@@ -447,7 +451,7 @@ final class WLocMacMapViewController: NSViewController {
             make.height.equalTo(22)
         }
         searchField.snp.makeConstraints { make in
-            make.top.equalTo(versionLabel.snp.bottom).offset(12)
+            make.top.equalTo(externalLinkStack.snp.bottom).offset(14)
             make.leading.trailing.equalToSuperview().inset(18)
             make.height.equalTo(36)
         }
@@ -478,11 +482,11 @@ final class WLocMacMapViewController: NSViewController {
         favoritesScroll.snp.makeConstraints { make in
             make.top.equalTo(favoriteTitle.snp.bottom).offset(8)
             make.leading.trailing.equalTo(searchField)
-            make.bottom.equalTo(externalLinkStack.snp.top).offset(-12)
+            make.bottom.equalToSuperview().inset(18)
         }
         externalLinkStack.snp.makeConstraints { make in
             make.leading.trailing.equalTo(searchField)
-            make.bottom.equalToSuperview().inset(12)
+            make.top.equalTo(versionLabel.snp.bottom).offset(14)
         }
 
         searchResultsPanel.snp.makeConstraints { make in

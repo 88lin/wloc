@@ -14,11 +14,11 @@ final class WLocMapViewController: UIViewController {
 
     private let searchGlass = WLocGlassView(cornerRadius: 22, fallbackStyle: .extraLight)
     private let searchField = UITextField()
-    private let searchButton = WLocGlassButton(title: "搜索", style: .secondary)
+    private let searchButton = WLocGlassButton(title: "", style: .icon)
 
     private let resultsGlass = WLocGlassView(cornerRadius: 24, fallbackStyle: .extraLight)
     private let resultsTitleLabel = UILabel()
-    private let closeResultsButton = WLocGlassButton(title: "关闭", style: .secondary)
+    private let closeResultsButton = WLocGlassButton(title: "", style: .icon)
     private let resultsTable = UITableView(frame: .zero, style: .plain)
 
     private let bottomGlass = WLocGlassView(cornerRadius: 28, fallbackStyle: .extraLight)
@@ -26,17 +26,14 @@ final class WLocMapViewController: UIViewController {
     private let detailLabel = UILabel()
     private let coordinateLabel = UILabel()
     private let lockButton = WLocGlassButton(title: "锁定位置", style: .primary)
-    private let advancedLockButton = WLocGlassButton(title: "高级锁定", style: .secondary)
-    private let restoreButton = WLocGlassButton(title: "还原定位", style: .secondary)
-    private let favoriteButton = WLocGlassButton(title: "收藏", style: .secondary)
-    private let favoritesButton = WLocGlassButton(title: "收藏夹", style: .secondary)
-    private let coordinateInputButton = WLocGlassButton(title: "经纬度", style: .secondary)
-    private let tutorialButton = WLocGlassButton(title: "教程", style: .required)
+    private let advancedLockButton = WLocGlassButton(title: "", style: .icon)
+    private let restoreButton = WLocGlassButton(title: "", style: .icon)
+    private let favoriteButton = WLocGlassButton(title: "", style: .icon)
+    private let moreButton = WLocGlassButton(title: "", style: .icon)
+    private let tutorialButton = WLocGlassButton(title: "教程与证书", style: .secondary)
+    private let updateBadge = UIView()
     private let telegramButton = WLocGlassButton(title: "Telegram", style: .secondary)
-    private let websiteButton = WLocGlassButton(title: "Github", style: .secondary)
-    private let debugLogButton = WLocGlassButton(title: "查看日志", style: .secondary)
-    private let versionLabel = UILabel()
-    private let updateButton = WLocGlassButton(title: "检查更新", style: .secondary)
+    private let websiteButton = WLocGlassButton(title: "GitHub", style: .secondary)
     private let locateButton = WLocGlassButton(title: "", style: .icon)
 
     private var searchResults: [AppWLocPlace] = []
@@ -49,6 +46,7 @@ final class WLocMapViewController: UIViewController {
     private var shouldCenterOnUserLocation = false
     private var lastUserCoordinate: CLLocationCoordinate2D?
     private var availableUpdate: AppWLocAvailableUpdate?
+    private var isCheckingUpdates = false
     private var isLocking = false
 
     override func viewDidLoad() {
@@ -100,6 +98,7 @@ final class WLocMapViewController: UIViewController {
         searchField.autocorrectionType = .no
         searchField.enablesReturnKeyAutomatically = true
 
+        configureIconButton(searchButton, symbol: "magnifyingglass", fallback: "⌕", label: "搜索地点")
         searchButton.addTarget(self, action: #selector(performSearch), for: .touchUpInside)
     }
 
@@ -110,6 +109,7 @@ final class WLocMapViewController: UIViewController {
         resultsTitleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
         resultsTitleLabel.textColor = UIColor(red: 0.07, green: 0.1, blue: 0.16, alpha: 1)
 
+        configureIconButton(closeResultsButton, symbol: "xmark", fallback: "×", label: "关闭搜索结果")
         closeResultsButton.addTarget(self, action: #selector(closeSearchResults), for: .touchUpInside)
 
         resultsTable.dataSource = self
@@ -121,6 +121,7 @@ final class WLocMapViewController: UIViewController {
         resultsTable.tableFooterView = UIView()
     }
 
+    /// 锁定和教程入口用醒目的蓝色，辅助工具用图标，社区入口使用淡底色。
     private func configureBottomPanel() {
         titleLabel.font = .systemFont(ofSize: 19, weight: .bold)
         titleLabel.textColor = UIColor(red: 0.05, green: 0.08, blue: 0.13, alpha: 1)
@@ -134,32 +135,61 @@ final class WLocMapViewController: UIViewController {
         coordinateLabel.textColor = UIColor(red: 0.37, green: 0.42, blue: 0.5, alpha: 1)
         coordinateLabel.numberOfLines = 1
 
+        configureIconButton(advancedLockButton, symbol: "slider.horizontal.3", fallback: "☷", label: "高级锁定")
+        advancedLockButton.accessibilityHint = "设置海拔、水平精度和垂直精度后锁定"
+        configureIconButton(restoreButton, symbol: "arrow.counterclockwise", fallback: "↶", label: "还原定位")
+        configureIconButton(favoriteButton, symbol: "star", fallback: "☆", label: "收藏当前位置")
+        favoriteButton.backgroundColor = .clear
+        favoriteButton.layer.borderWidth = 0
+        favoriteButton.adjustsImageWhenDisabled = false
+        configureIconButton(moreButton, symbol: "ellipsis", fallback: "•••", label: "更多功能")
+        moreButton.accessibilityHint = "收藏夹、经纬度、日志和检查更新"
+        moreButton.addTarget(self, action: #selector(openMoreMenu), for: .touchUpInside)
+        updateBadge.backgroundColor = UIColor(red: 0.06, green: 0.35, blue: 0.95, alpha: 1)
+        updateBadge.layer.cornerRadius = 3
+        updateBadge.isHidden = true
+        updateBadge.isUserInteractionEnabled = false
+        moreButton.addSubview(updateBadge)
+        updateBadge.snp.makeConstraints { make in
+            make.top.trailing.equalToSuperview().inset(9)
+            make.width.height.equalTo(6)
+        }
+
         lockButton.addTarget(self, action: #selector(lockCurrentPlace), for: .touchUpInside)
         advancedLockButton.addTarget(self, action: #selector(openAdvancedLock), for: .touchUpInside)
         restoreButton.addTarget(self, action: #selector(restoreLocation), for: .touchUpInside)
         favoriteButton.addTarget(self, action: #selector(addFavorite), for: .touchUpInside)
-        favoritesButton.addTarget(self, action: #selector(openFavorites), for: .touchUpInside)
-        coordinateInputButton.addTarget(self, action: #selector(openCoordinateInput), for: .touchUpInside)
+        configureExternalLinkButton(
+            tutorialButton,
+            image: WLocExternalIcon.image(named: "book.closed.fill", fallback: .symbol("▤"), size: CGSize(width: 16, height: 16)),
+            color: UIColor(red: 0.06, green: 0.35, blue: 0.95, alpha: 1),
+            accessibilityLabel: "教程与证书"
+        )
+        tutorialButton.backgroundColor = UIColor(red: 0.06, green: 0.35, blue: 0.95, alpha: 1)
+        tutorialButton.tintColor = .white
+        tutorialButton.setTitleColor(.white, for: .normal)
+        tutorialButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
+        tutorialButton.layer.cornerRadius = 14
+        tutorialButton.layer.borderColor = UIColor.white.withAlphaComponent(0.35).cgColor
+        tutorialButton.layer.shadowOpacity = 0.18
+        tutorialButton.layer.shadowRadius = 10
+        tutorialButton.layer.shadowOffset = CGSize(width: 0, height: 4)
+        tutorialButton.accessibilityHint = "查看使用教程、下载并安装定位证书"
         tutorialButton.addTarget(self, action: #selector(openTutorial), for: .touchUpInside)
         configureExternalLinkButton(
             telegramButton,
-            image: WLocExternalIcon.image(named: "paperplane.fill", fallback: .telegram, size: CGSize(width: 18, height: 18)),
+            image: WLocExternalIcon.image(named: "paperplane.fill", fallback: .telegram, size: CGSize(width: 16, height: 16)),
+            color: UIColor(red: 0.08, green: 0.43, blue: 0.68, alpha: 1),
             accessibilityLabel: "打开 Telegram"
         )
         telegramButton.addTarget(self, action: #selector(openTelegram), for: .touchUpInside)
         configureExternalLinkButton(
             websiteButton,
-            image: WLocExternalIcon.image(named: "chevron.left.forwardslash.chevron.right", fallback: .code, size: CGSize(width: 18, height: 18)),
-            accessibilityLabel: "查看Github源码"
+            image: WLocExternalIcon.image(named: "chevron.left.forwardslash.chevron.right", fallback: .code, size: CGSize(width: 16, height: 16)),
+            color: UIColor(red: 0.2, green: 0.24, blue: 0.3, alpha: 1),
+            accessibilityLabel: "查看 GitHub 开源项目"
         )
         websiteButton.addTarget(self, action: #selector(openWebsite), for: .touchUpInside)
-        debugLogButton.addTarget(self, action: #selector(openDebugLog), for: .touchUpInside)
-
-        versionLabel.text = "\(AppWLocConfig.displayName) · 版本 \(AppWLocConfig.currentVersion)"
-        versionLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        versionLabel.textColor = UIColor(red: 0.34, green: 0.39, blue: 0.47, alpha: 1)
-        updateButton.titleLabel?.font = .systemFont(ofSize: 12, weight: .semibold)
-        updateButton.addTarget(self, action: #selector(updateButtonTapped), for: .touchUpInside)
         locateButton.setTitle(nil, for: .normal)
         locateButton.setImage(WLocLocationIcon.image(size: CGSize(width: 23, height: 23)), for: .normal)
         locateButton.tintColor = UIColor(red: 0.05, green: 0.16, blue: 0.28, alpha: 1)
@@ -173,9 +203,11 @@ final class WLocMapViewController: UIViewController {
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
     }
 
+    /// 地点面板保持两排，教程与证书单独放在搜索框下方，其他工具从更多菜单打开。
     private func layoutViews() {
         view.addSubview(mapView)
         view.addSubview(searchGlass)
+        view.addSubview(tutorialButton)
         view.addSubview(resultsGlass)
         view.addSubview(locateButton)
         view.addSubview(bottomGlass)
@@ -194,14 +226,19 @@ final class WLocMapViewController: UIViewController {
         searchButton.snp.makeConstraints { make in
             make.trailing.equalToSuperview().inset(8)
             make.centerY.equalToSuperview()
-            make.width.equalTo(68)
-            make.height.equalTo(40)
+            make.width.height.equalTo(44)
         }
         searchField.snp.makeConstraints { make in
             make.leading.equalToSuperview().offset(18)
             make.trailing.equalTo(searchButton.snp.leading).offset(-10)
             make.centerY.equalToSuperview()
             make.height.equalTo(42)
+        }
+        tutorialButton.snp.makeConstraints { make in
+            make.top.equalTo(searchGlass.snp.bottom).offset(12)
+            make.trailing.equalTo(searchGlass)
+            make.width.equalTo(136)
+            make.height.equalTo(44)
         }
 
         resultsGlass.contentView.addSubview(resultsTitleLabel)
@@ -213,16 +250,16 @@ final class WLocMapViewController: UIViewController {
             make.height.equalTo(268)
         }
         resultsTitleLabel.snp.makeConstraints { make in
-            make.top.leading.equalToSuperview().offset(16)
+            make.leading.equalToSuperview().offset(16)
+            make.centerY.equalTo(closeResultsButton)
         }
         closeResultsButton.snp.makeConstraints { make in
-            make.centerY.equalTo(resultsTitleLabel)
+            make.top.equalToSuperview().offset(8)
             make.trailing.equalToSuperview().inset(14)
-            make.width.equalTo(60)
-            make.height.equalTo(34)
+            make.width.height.equalTo(44)
         }
         resultsTable.snp.makeConstraints { make in
-            make.top.equalTo(resultsTitleLabel.snp.bottom).offset(10)
+            make.top.equalTo(closeResultsButton.snp.bottom).offset(8)
             make.leading.trailing.bottom.equalToSuperview()
         }
 
@@ -240,52 +277,68 @@ final class WLocMapViewController: UIViewController {
         let actionRow = UIStackView(arrangedSubviews: [lockButton, advancedLockButton, restoreButton])
         actionRow.axis = .horizontal
         actionRow.spacing = 8
-        actionRow.distribution = .fillEqually
+        actionRow.alignment = .center
+        [advancedLockButton, restoreButton, favoriteButton, moreButton].forEach { button in
+            button.snp.makeConstraints { make in make.width.height.equalTo(44) }
+        }
+        lockButton.snp.makeConstraints { make in make.height.equalTo(48) }
 
-        let secondaryRow = UIStackView(arrangedSubviews: [favoriteButton, favoritesButton, coordinateInputButton, tutorialButton])
-        secondaryRow.axis = .horizontal
-        secondaryRow.spacing = 10
-        secondaryRow.distribution = .fillEqually
-
-        let externalLinkRow = UIStackView(arrangedSubviews: [telegramButton, websiteButton, debugLogButton])
+        let externalLinkRow = UIStackView(arrangedSubviews: [telegramButton, websiteButton])
         externalLinkRow.axis = .horizontal
-        externalLinkRow.spacing = 10
+        externalLinkRow.spacing = 8
         externalLinkRow.distribution = .fillEqually
 
-        let versionSpacer = UIView()
-        let versionRow = UIStackView(arrangedSubviews: [versionLabel, versionSpacer, updateButton])
-        versionRow.axis = .horizontal
-        versionRow.spacing = 8
-        versionRow.alignment = .center
+        let footerRow = UIStackView(arrangedSubviews: [externalLinkRow, moreButton])
+        footerRow.axis = .horizontal
+        footerRow.spacing = 8
+        footerRow.alignment = .center
 
-        let stack = UIStackView(arrangedSubviews: [titleLabel, detailLabel, coordinateLabel, actionRow, secondaryRow, externalLinkRow, versionRow])
+        let headingRow = UIStackView(arrangedSubviews: [titleLabel, favoriteButton])
+        headingRow.axis = .horizontal
+        headingRow.spacing = 8
+        headingRow.alignment = .center
+        titleLabel.lineBreakMode = .byTruncatingTail
+
+        let stack = UIStackView(arrangedSubviews: [headingRow, detailLabel, coordinateLabel, actionRow, footerRow])
         stack.axis = .vertical
         stack.spacing = 10
+        stack.setCustomSpacing(2, after: headingRow)
+        stack.setCustomSpacing(4, after: detailLabel)
         bottomGlass.contentView.addSubview(stack)
         stack.snp.makeConstraints { make in
-            make.edges.equalToSuperview().inset(18)
+            make.edges.equalToSuperview().inset(16)
         }
         actionRow.snp.makeConstraints { make in
-            make.height.equalTo(50)
-        }
-        secondaryRow.snp.makeConstraints { make in
-            make.height.equalTo(44)
+            make.height.equalTo(48)
         }
         externalLinkRow.snp.makeConstraints { make in
             make.height.equalTo(44)
         }
-        versionRow.snp.makeConstraints { make in
-            make.height.equalTo(32)
-        }
-        updateButton.snp.makeConstraints { make in
-            make.width.greaterThanOrEqualTo(82)
-            make.height.equalTo(30)
-        }
     }
 
-    private func configureExternalLinkButton(_ button: WLocGlassButton, image: UIImage, accessibilityLabel: String) {
+    /// 图标按钮保留无障碍名称，触摸区域由布局统一保证为 44 点。
+    private func configureIconButton(_ button: WLocGlassButton, symbol: String, fallback: String, label: String) {
+        button.setImage(WLocExternalIcon.image(named: symbol, fallback: .symbol(fallback), size: CGSize(width: 21, height: 21)).withRenderingMode(.alwaysTemplate), for: .normal)
+        button.tintColor = UIColor(red: 0.24, green: 0.3, blue: 0.37, alpha: 1)
+        button.contentEdgeInsets = UIEdgeInsets(top: 11, left: 11, bottom: 11, right: 11)
+        button.imageView?.contentMode = .scaleAspectFit
+        button.layer.cornerRadius = 12
+        button.layer.shadowOpacity = 0
+        button.backgroundColor = UIColor.white.withAlphaComponent(0.3)
+        button.accessibilityLabel = label
+    }
+
+    /// 社区入口保留图标和名称，使用淡品牌色，避免抢过锁定按钮。
+    private func configureExternalLinkButton(_ button: WLocGlassButton, image: UIImage, color: UIColor, accessibilityLabel: String) {
         button.setImage(image.withRenderingMode(.alwaysTemplate), for: .normal)
-        button.tintColor = UIColor(red: 0.08, green: 0.12, blue: 0.18, alpha: 1)
+        button.tintColor = color
+        button.setTitleColor(color, for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
+        button.contentEdgeInsets = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
+        button.backgroundColor = color.withAlphaComponent(0.09)
+        button.layer.borderColor = color.withAlphaComponent(0.13).cgColor
+        button.layer.cornerRadius = 12
+        button.layer.shadowOpacity = 0
         button.imageView?.contentMode = .scaleAspectFit
         button.semanticContentAttribute = .forceLeftToRight
         button.imageEdgeInsets = UIEdgeInsets(top: 0, left: -4, bottom: 0, right: 6)
@@ -293,6 +346,7 @@ final class WLocMapViewController: UIViewController {
         button.accessibilityLabel = accessibilityLabel
     }
 
+    /// 未选点时禁用锁定和收藏，保留还原与更多入口。
     private func updateEmptySelection() {
         selectedPlace = nil
         titleLabel.text = "选择一个位置"
@@ -302,11 +356,10 @@ final class WLocMapViewController: UIViewController {
         lockButton.alpha = 0.55
         advancedLockButton.isEnabled = false
         advancedLockButton.alpha = 0.55
-        favoriteButton.isEnabled = false
-        favoriteButton.alpha = 0.55
-        favoriteButton.setTitle("收藏", for: .normal)
+        updateFavoriteButton()
     }
 
+    /// 更新地点信息时同步锁定按钮和收藏星标的状态。
     private func updateSelectedPlace(_ place: AppWLocPlace) {
         selectedPlace = place
         titleLabel.text = place.name
@@ -316,9 +369,18 @@ final class WLocMapViewController: UIViewController {
         lockButton.alpha = isLocking ? 0.7 : 1
         advancedLockButton.isEnabled = !isLocking
         advancedLockButton.alpha = isLocking ? 0.7 : 1
-        favoriteButton.isEnabled = !AppWLocFavoriteStore.shared.contains(place)
-        favoriteButton.alpha = favoriteButton.isEnabled ? 1 : 0.58
-        favoriteButton.setTitle(favoriteButton.isEnabled ? "收藏" : "已收藏", for: .normal)
+        updateFavoriteButton()
+    }
+
+    /// 用空心和实心星标区分未收藏、已收藏，不再占用一整排按钮。
+    private func updateFavoriteButton() {
+        let isSaved = selectedPlace.map { AppWLocFavoriteStore.shared.contains($0) } ?? false
+        favoriteButton.isEnabled = selectedPlace != nil && !isSaved
+        favoriteButton.alpha = selectedPlace == nil ? 0.45 : 1
+        favoriteButton.tintColor = isSaved ? UIColor(red: 0.75, green: 0.5, blue: 0.1, alpha: 1)
+            : UIColor(red: 0.24, green: 0.3, blue: 0.37, alpha: 1)
+        favoriteButton.setImage(WLocExternalIcon.image(named: isSaved ? "star.fill" : "star", fallback: .symbol(isSaved ? "★" : "☆"), size: CGSize(width: 21, height: 21)).withRenderingMode(.alwaysTemplate), for: .normal)
+        favoriteButton.accessibilityLabel = isSaved ? "当前位置已收藏" : "收藏当前位置"
     }
 
     private func selectPlace(
@@ -474,6 +536,7 @@ final class WLocMapViewController: UIViewController {
         resultsGlass.isHidden = true
     }
 
+    /// 坐标来源菜单从更多入口弹出，iPad 也有有效的弹窗锚点。
     @objc private func openCoordinateInput() {
         view.endEditing(true)
         let sheet = UIAlertController(title: "选择坐标来源", message: nil, preferredStyle: .actionSheet)
@@ -483,8 +546,8 @@ final class WLocMapViewController: UIViewController {
             })
         }
         sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-        sheet.popoverPresentationController?.sourceView = coordinateInputButton
-        sheet.popoverPresentationController?.sourceRect = coordinateInputButton.bounds
+        sheet.popoverPresentationController?.sourceView = moreButton
+        sheet.popoverPresentationController?.sourceRect = moreButton.bounds
         present(sheet, animated: true)
     }
 
@@ -620,7 +683,7 @@ final class WLocMapViewController: UIViewController {
                 case .success:
                     self.showMessage("已锁定", successMessage)
                 case .failure(let error):
-                    self.showMessage("启动失败", error.localizedDescription)
+                    self.showVPNStartError(error)
                 }
             }
         }
@@ -684,6 +747,36 @@ final class WLocMapViewController: UIViewController {
         present(alert, animated: true)
     }
 
+    /// 低频工具集中到更多菜单；先关闭菜单，再显示下一页，避免叠加弹窗。
+    @objc private func openMoreMenu() {
+        view.endEditing(true)
+        guard presentedViewController == nil else { return }
+        let sheet = UIAlertController(title: "更多功能", message: "\(AppWLocConfig.displayName) · 版本 \(AppWLocConfig.currentVersion)", preferredStyle: .actionSheet)
+        let updateTitle = isCheckingUpdates ? "正在检查更新…" : availableUpdate.map { "下载更新 v\($0.version)" } ?? "检查更新"
+        let items: [(String, (WLocMapViewController) -> Void)] = [
+            ("收藏夹", { $0.openFavorites() }),
+            ("输入经纬度", { $0.openCoordinateInput() }),
+            ("查看日志", { $0.openDebugLog() }),
+            (updateTitle, { $0.openUpdate() })
+        ]
+        for (title, action) in items {
+            let item = UIAlertAction(title: title, style: .default) { [weak self, weak sheet] _ in
+                guard let self else { return }
+                if let sheet, sheet.presentingViewController != nil {
+                    sheet.dismiss(animated: true) { action(self) }
+                } else {
+                    action(self)
+                }
+            }
+            item.isEnabled = title != updateTitle || !isCheckingUpdates
+            sheet.addAction(item)
+        }
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+        sheet.popoverPresentationController?.sourceView = moreButton
+        sheet.popoverPresentationController?.sourceRect = moreButton.bounds
+        present(sheet, animated: true)
+    }
+
     @objc private func openFavorites() {
         view.endEditing(true)
         let controller = WLocFavoritesViewController()
@@ -720,7 +813,8 @@ final class WLocMapViewController: UIViewController {
         present(navigation, animated: true)
     }
 
-    @objc private func updateButtonTapped() {
+    /// 更多菜单里的更新入口沿用原来的安装包跳转逻辑。
+    private func openUpdate() {
         if let availableUpdate {
             openExternalURL(availableUpdate.downloadURL)
         } else {
@@ -728,33 +822,37 @@ final class WLocMapViewController: UIViewController {
         }
     }
 
+    /// 自动检查只显示小圆点；主动检查发现新版时弹出下载提示。
     private func checkForUpdates(userInitiated: Bool) {
-        if userInitiated {
-            updateButton.isEnabled = false
-            updateButton.setTitle("检查中…", for: .normal)
-        }
+        guard !isCheckingUpdates else { return }
+        isCheckingUpdates = true
+        moreButton.accessibilityValue = "正在检查更新"
         AppWLocUpdateChecker.shared.check(platform: .iOS) { [weak self] result in
             guard let self = self else { return }
-            self.updateButton.isEnabled = true
+            self.isCheckingUpdates = false
             switch result {
             case .updateAvailable(let update):
                 self.availableUpdate = update
-                self.updateButton.setTitle("更新 v\(update.version)", for: .normal)
-                self.updateButton.accessibilityLabel = "下载 WLoc8.com v\(update.version)"
+                if userInitiated, self.presentedViewController == nil {
+                    let alert = UIAlertController(title: "发现新版本 v\(update.version)", message: "当前版本：\(AppWLocConfig.currentVersion)", preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "稍后", style: .cancel))
+                    alert.addAction(UIAlertAction(title: "查看安装包", style: .default) { [weak self] _ in self?.openExternalURL(update.downloadURL) })
+                    self.present(alert, animated: true)
+                }
             case .upToDate(let latestVersion):
                 self.availableUpdate = nil
-                self.updateButton.setTitle("检查更新", for: .normal)
                 if userInitiated {
                     self.showMessage("已是最新版本", "当前版本：\(AppWLocConfig.currentVersion)\n最新版本：\(latestVersion)")
                 }
             case .failure(let error):
-                self.updateButton.setTitle("检查更新", for: .normal)
                 if userInitiated {
                     self.showMessage("检查更新失败", error.localizedDescription)
                 } else {
                     AppWLocUtils.debugLog("\(AppWLocConfig.displayName) iOS 自动检查更新失败：\(error.localizedDescription)")
                 }
             }
+            self.updateBadge.isHidden = self.availableUpdate == nil
+            self.moreButton.accessibilityValue = self.availableUpdate.map { "有新版本 v\($0.version)" }
         }
     }
 
@@ -777,6 +875,19 @@ final class WLocMapViewController: UIViewController {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "好", style: .default))
         present(alert, animated: true)
+    }
+
+    /// VPN 权限错误换成中文指引，其他启动错误继续显示原来的原因。
+    private func showVPNStartError(_ error: Error) {
+        var currentError: NSError? = error as NSError
+        while let cause = currentError {
+            if cause.localizedDescription.range(of: "permission denied", options: .caseInsensitive) != nil {
+                showMessage("VPN 配置失败或当前证书无 VPN 权限", "请允许添加 VPN 配置后重试；若仍然失败，请使用具备 VPN 权限的证书重新签名并安装应用。")
+                return
+            }
+            currentError = cause.userInfo[NSUnderlyingErrorKey] as? NSError
+        }
+        showMessage("启动失败", error.localizedDescription)
     }
 }
 
@@ -1211,16 +1322,19 @@ private enum WLocExternalIcon {
     enum Fallback {
         case telegram
         case code
+        case symbol(String)
     }
 
+    /// 优先使用系统图标，iOS 12 使用字形绘制的图标保持入口可见。
     static func image(named systemName: String, fallback: Fallback, size: CGSize) -> UIImage {
-        if #available(iOS 13.0, *), let systemImage = UIImage(systemName: systemName) {
+        if #available(iOS 13.0, *), let systemImage = UIImage(systemName: systemName, withConfiguration: UIImage.SymbolConfiguration(pointSize: size.height, weight: .medium)) {
             return systemImage
         }
 
         return fallbackImage(fallback, size: size)
     }
 
+    /// 老系统也提供星标、还原和更多等图标，不退回成文字按钮。
     private static func fallbackImage(_ icon: Fallback, size: CGSize) -> UIImage {
         UIGraphicsBeginImageContextWithOptions(size, false, 0)
         defer { UIGraphicsEndImageContext() }
@@ -1234,6 +1348,10 @@ private enum WLocExternalIcon {
             drawTelegramIcon(in: CGRect(origin: .zero, size: size))
         case .code:
             drawCodeIcon(in: CGRect(origin: .zero, size: size))
+        case .symbol(let symbol):
+            let text = NSAttributedString(string: symbol, attributes: [.font: UIFont.systemFont(ofSize: size.height * 0.9, weight: .medium), .foregroundColor: color])
+            let textSize = text.size()
+            text.draw(at: CGPoint(x: (size.width - textSize.width) / 2, y: (size.height - textSize.height) / 2))
         }
 
         return UIGraphicsGetImageFromCurrentImageContext() ?? UIImage()

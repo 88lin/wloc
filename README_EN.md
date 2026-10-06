@@ -106,8 +106,6 @@ Make sure all four targets use the correct Team and that the iOS App and Tunnel 
 
 Check that the root certificate is installed and fully trusted. On iOS, also make sure the VPN is connected. On macOS, make sure the system's Automatic Proxy Configuration points to the local PAC, then refresh Location Services as instructed by the app.
 
-For more troubleshooting steps, see [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
-
 ## License
 
 Code owned by this project is licensed under the [MIT License](LICENSE). Third-party code is not covered by this project's MIT License. See [NOTICE](NOTICE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for details.

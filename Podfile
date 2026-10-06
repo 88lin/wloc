@@ -5,7 +5,7 @@ project 'WLocApp.xcodeproj'
 
 target 'WLocApp-iOS' do
   platform :ios, '12.0'
-  pod 'SwiftProtobuf', '1.19.0'
+  pod 'SwiftProtobuf', '1.38.1'
   pod 'SnapKit', '5.6.0'
   pod 'IQKeyboardManagerSwift', '6.5.16'
   pod 'GCDWebServer', '~> 3.5'
@@ -13,12 +13,12 @@ end
 
 target 'WLocTunnel-iOS' do
   platform :ios, '12.0'
-  pod 'SwiftProtobuf', '1.19.0'
+  pod 'SwiftProtobuf', '1.38.1'
 end
 
 target 'WLocApp-macOS' do
   platform :osx, '13.0'
-  pod 'SwiftProtobuf', '1.19.0'
+  pod 'SwiftProtobuf', '1.38.1'
   pod 'SnapKit', '5.6.0'
   pod 'GCDWebServer', '~> 3.5'
 end
