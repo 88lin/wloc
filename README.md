@@ -109,4 +109,4 @@ wlocapp://?payload=<percent-encoded-json>
 
 ## 许可证
 
-本项目自有代码使用 [MIT License](LICENSE)。第三方代码不受本项目 MIT License 覆盖，具体见 [NOTICE](NOTICE) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+本项目自有代码使用 [MIT License](LICENSE)。第三方代码不受本项目 MIT License 覆盖。

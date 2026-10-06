@@ -108,4 +108,4 @@ Check that the root certificate is installed and fully trusted. On iOS, also mak
 
 ## License
 
-Code owned by this project is licensed under the [MIT License](LICENSE). Third-party code is not covered by this project's MIT License. See [NOTICE](NOTICE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for details.
+Code owned by this project is licensed under the [MIT License](LICENSE). Third-party code is not covered by this project's MIT License.
