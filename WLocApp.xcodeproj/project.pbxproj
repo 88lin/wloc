@@ -7,9 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A70000000000000000000001 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A70000000000000000000011 /* LaunchScreen.storyboard */; };
-		A70000000000000000000002 /* LaunchAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A70000000000000000000012 /* LaunchAssets.xcassets */; };
-        A60000000000000000000001 /* WLocMacUpdateInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000002 /* WLocMacUpdateInstaller.swift */; };
 		00580BB756C67F2C1F5E53C6 /* WLocGlassView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDA7C6210F55F1EA98FC78D7 /* WLocGlassView.swift */; };
 		01C4576B60B3AF0CB490F5B6 /* AppWLocARPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9F9939D7325F27176EA3A51 /* AppWLocARPC.swift */; };
 		05C034B4E8166C14BCEE1888 /* PacketTunnelProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C53079214FE279F94DE9C9 /* PacketTunnelProvider.swift */; };
@@ -62,6 +59,9 @@
 		A50000000000000000000004 /* WLocPrivilegedHelper in Embed Privileged Helper */ = {isa = PBXBuildFile; fileRef = A50000000000000000000013 /* WLocPrivilegedHelper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		A50000000000000000000005 /* com.hrtt.applocmac.helper.plist in Embed LaunchDaemon */ = {isa = PBXBuildFile; fileRef = A50000000000000000000014 /* com.hrtt.applocmac.helper.plist */; };
 		A557476A60AAAEEAF35216B1 /* WLocTunnel-iOS.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 6D7E280FA03E627C6F6F19EE /* WLocTunnel-iOS.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A60000000000000000000001 /* WLocMacUpdateInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000002 /* WLocMacUpdateInstaller.swift */; };
+		A70000000000000000000001 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A70000000000000000000011 /* LaunchScreen.storyboard */; };
+		A70000000000000000000002 /* LaunchAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A70000000000000000000012 /* LaunchAssets.xcassets */; };
 		A9C1A0ECD0A14DA25DB18C14 /* CertificateDownloadServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85ABA53CB866EF36A55598A9 /* CertificateDownloadServer.swift */; };
 		B12A81B9EC1CA371168B9DF7 /* AppWLocConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBAE5E6495746F73DAEA4733 /* AppWLocConfig.swift */; };
 		B21A119B26DDEA7EF0C217CF /* WLocMacTutorialWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF408712836F5D0F1BE52A08 /* WLocMacTutorialWindowController.swift */; };
@@ -135,9 +135,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		A70000000000000000000011 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
-		A70000000000000000000012 /* LaunchAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = LaunchAssets.xcassets; sourceTree = "<group>"; };
-        A60000000000000000000002 /* WLocMacUpdateInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WLocMacUpdateInstaller.swift; sourceTree = "<group>"; };
 		085DE08A9C0C3F6E05FE6B1E /* Pods-WLocTunnel-iOS.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-WLocTunnel-iOS.debug.xcconfig"; path = "Target Support Files/Pods-WLocTunnel-iOS/Pods-WLocTunnel-iOS.debug.xcconfig"; sourceTree = "<group>"; };
 		086D0B98BDC3BC6E4313F191 /* AppWLocModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppWLocModels.swift; sourceTree = "<group>"; };
 		0F8E81DBA996BB34785BA97E /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -176,6 +173,9 @@
 		A50000000000000000000013 /* WLocPrivilegedHelper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = WLocPrivilegedHelper; sourceTree = BUILT_PRODUCTS_DIR; };
 		A50000000000000000000014 /* com.hrtt.applocmac.helper.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = com.hrtt.applocmac.helper.plist; sourceTree = "<group>"; };
 		A50000000000000000000015 /* WLocPrivilegedHelper-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "WLocPrivilegedHelper-Info.plist"; sourceTree = "<group>"; };
+		A60000000000000000000002 /* WLocMacUpdateInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WLocMacUpdateInstaller.swift; sourceTree = "<group>"; };
+		A70000000000000000000011 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		A70000000000000000000012 /* LaunchAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = LaunchAssets.xcassets; sourceTree = "<group>"; };
 		A9F9939D7325F27176EA3A51 /* AppWLocARPC.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppWLocARPC.swift; sourceTree = "<group>"; };
 		AFC22EF13FF8AAECA1B6CD4C /* BSSIDApp.pb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BSSIDApp.pb.swift; sourceTree = "<group>"; };
 		B07524018E68C294B2AA614D /* WLocTunnel-iOS.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = "WLocTunnel-iOS.entitlements"; sourceTree = "<group>"; };
@@ -818,7 +818,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = WLoc8.com;
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hrtt.apploc;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = apploc_dev;
@@ -1117,7 +1117,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = WLoc8.com;
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hrtt.apploc;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = apploc_dev;

@@ -715,20 +715,17 @@ final class WLocMapViewController: UIViewController {
         lock(place, successMessage: "已通过外部链接保存目标位置并连接 VPN。")
     }
 
+    /// 选中坐标即可收藏，无需等待详细地址解析完成。
     @objc private func addFavorite() {
         guard let place = selectedPlace else {
             showMessage("请选择位置", "请先选择一个位置后再收藏。")
             return
         }
 
-        let address = place.detail.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !address.isEmpty else {
-            showMessage("地址尚未获取", "请等待详细地址显示后再加入收藏。")
-            return
-        }
+        let favorite = AppWLocFavorite(place: place, alias: "")
         let alert = UIAlertController(
             title: "加入收藏",
-            message: "地点：\(place.name)\n地址：\(address)\n坐标：\(place.coordinateText)",
+            message: "地点：\(favorite.title)\n地址：\(favorite.detail)\n坐标：\(favorite.coordinateText)",
             preferredStyle: .alert
         )
         alert.addTextField { textField in
@@ -1318,7 +1315,7 @@ private enum WLocExternalLink {
     static let github = URL(string: "https://github.com/OpenHRTT/wloc")!
 }
 
-private enum WLocExternalIcon {
+enum WLocExternalIcon {
     enum Fallback {
         case telegram
         case code

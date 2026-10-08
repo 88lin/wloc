@@ -39,20 +39,23 @@ private final class WLocArrowCursorMapView: MKMapView {
     }
 }
 
-private final class WLocMacLinkButton: NSButton {
-    private let baseColor: NSColor
+private final class WLocMacActionButton: NSButton {
+    private let baseColor: NSColor?
     private var trackingAreaToken: NSTrackingArea?
     private var isPointerInside = false
+    var stateTintColor: NSColor? {
+        didSet { updateAppearance() }
+    }
 
-    init(title: String, color: NSColor) {
+    init(title: String, color: NSColor? = nil) {
         baseColor = color
         super.init(frame: .zero)
         self.title = title
         isBordered = false
         setButtonType(.momentaryChange)
         wantsLayer = true
-        layer?.cornerRadius = 10
-        font = .systemFont(ofSize: 12)
+        layer?.cornerRadius = 9
+        font = .systemFont(ofSize: 13, weight: .semibold)
         alignment = .center
         imageScaling = .scaleProportionallyDown
         imagePosition = .imageLeading
@@ -62,6 +65,20 @@ private final class WLocMacLinkButton: NSButton {
 
     required init?(coder: NSCoder) {
         nil
+    }
+
+    override var isEnabled: Bool {
+        didSet { updateAppearance() }
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateAppearance()
+    }
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        if isEnabled { addCursorRect(bounds, cursor: .pointingHand) }
     }
 
     override func updateTrackingAreas() {
@@ -89,17 +106,16 @@ private final class WLocMacLinkButton: NSButton {
         updateAppearance()
     }
 
-    /// 社区入口使用品牌底色和白色文字，鼠标经过时加深底色。
+    /// 主按钮使用品牌底色，图标按钮使用淡底色，并根据鼠标和禁用状态调整外观。
     private func updateAppearance() {
-        let alpha: CGFloat = isPointerInside ? 1 : 0.9
-        layer?.backgroundColor = baseColor.withAlphaComponent(alpha).cgColor
-        attributedTitle = NSAttributedString(
-            string: title,
-            attributes: [
-                .foregroundColor: NSColor.white,
-            ]
-        )
-        contentTintColor = .white
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            let color = baseColor.map { isPointerInside ? ($0.blended(withFraction: 0.08, of: .black) ?? $0) : $0 }
+                ?? NSColor.labelColor.withAlphaComponent(isPointerInside ? 0.07 : 0)
+            layer?.backgroundColor = color.withAlphaComponent(isEnabled ? color.alphaComponent : color.alphaComponent * 0.45).cgColor
+            layer?.borderWidth = 0
+            contentTintColor = stateTintColor ?? (baseColor == nil ? (isEnabled ? .labelColor : .tertiaryLabelColor) : .white)
+            alphaValue = isEnabled || stateTintColor != nil ? 1 : 0.65
+        }
     }
 }
 
@@ -119,29 +135,33 @@ final class WLocMacMapViewController: NSViewController {
     private let searchResultsPanel = NSVisualEffectView()
     private let searchResultsTitleLabel = NSTextField.wlocLabel("搜索结果")
     private let searchResultsScroll = NSScrollView()
-    private let zoomInButton = NSButton.wlocButton("+")
-    private let zoomOutButton = NSButton.wlocButton("−")
-    private let currentLocationButton = NSButton.wlocButton("⌖")
+    private let zoomInButton = WLocMacActionButton(title: "放大地图")
+    private let zoomOutButton = WLocMacActionButton(title: "缩小地图")
+    private let currentLocationButton = WLocMacActionButton(title: "回到当前位置")
     private let titleLabel = NSTextField.wlocLabel("地图中心")
     private let detailLabel = NSTextField.wlocLabel("")
     private let coordinateLabel = NSTextField.wlocLabel("")
-    private let lockButton = NSButton.wlocButton("锁定位置")
-    private let advancedLockButton = NSButton.wlocButton("高级锁定")
-    private let restoreButton = NSButton.wlocButton("还原定位")
-    private let favoriteButton = NSButton.wlocButton("加入收藏")
-    private let coordinateInputButton = NSButton.wlocButton("经纬度选点")
-    private let tutorialButton = NSButton.wlocButton("教程与证书")
-    private let telegramButton = WLocMacLinkButton(
-        title: "加入 Telegram",
-        color: NSColor(calibratedRed: 0.13, green: 0.60, blue: 0.86, alpha: 1)
+    private let lockButton = WLocMacActionButton(title: "锁定位置", color: NSColor(calibratedRed: 0.12, green: 0.36, blue: 0.94, alpha: 1))
+    private let advancedLockButton = WLocMacActionButton(title: "高级锁定")
+    private let restoreButton = WLocMacActionButton(title: "还原定位")
+    private let favoriteButton = WLocMacActionButton(title: "加入收藏")
+    private let coordinateInputButton = WLocMacActionButton(title: "经纬度选点")
+    private let tutorialButton = WLocMacActionButton(title: "教程与证书")
+    private let telegramButton = WLocMacActionButton(
+        title: "Telegram",
+        color: NSColor(calibratedRed: 0.08, green: 0.52, blue: 0.82, alpha: 1)
     )
-    private let githubButton = WLocMacLinkButton(
+    private let githubButton = WLocMacActionButton(
         title: "GitHub · Star",
         color: NSColor(calibratedRed: 0.12, green: 0.14, blue: 0.18, alpha: 1)
     )
     private let appNameLabel = NSTextField.wlocLabel(AppWLocConfig.displayName)
     private let versionLabel = NSTextField.wlocLabel("版本 \(AppWLocConfig.currentVersion)")
-    private let updateButton = NSButton.wlocButton("")
+    private let updateButton = WLocMacActionButton(title: "检查更新")
+    private let updateBadge = NSView()
+    private let favoritesCountLabel = NSTextField.wlocLabel("0")
+    private let emptyFavoritesView = NSView()
+    private var favoritesHeightConstraint: Constraint?
     private let selectedAnnotation = MKPointAnnotation()
 
     private let geocoder = CLGeocoder()
@@ -191,6 +211,7 @@ final class WLocMacMapViewController: NSViewController {
         checkForUpdates(userInitiated: false)
     }
 
+    /// 保留原来的地图和交互，统一设置面板字体、图标与三种主按钮的外观。
     private func configureViews() {
         mapView.delegate = self
         mapView.showsCompass = true
@@ -221,11 +242,14 @@ final class WLocMacMapViewController: NSViewController {
         searchField.delegate = self
         searchField.target = self
         searchField.action = #selector(performSearch)
-        searchField.font = .systemFont(ofSize: 15)
+        searchField.font = .systemFont(ofSize: 13)
+        searchField.controlSize = .large
+        searchField.focusRingType = .default
 
         configureTable(searchTable)
         configureTable(favoritesTable)
         favoritesTable.rowHeight = 82
+        favoritesTable.style = .plain
 
         searchResultsPanel.material = .popover
         searchResultsPanel.blendingMode = .withinWindow
@@ -238,7 +262,7 @@ final class WLocMacMapViewController: NSViewController {
         searchResultsPanel.layer?.shadowRadius = 16
         searchResultsPanel.layer?.shadowOffset = NSSize(width: 0, height: -5)
 
-        searchResultsPanel.layer?.cornerRadius = 20
+        searchResultsPanel.layer?.cornerRadius = 16
         searchResultsPanel.clipsToBounds = true
 
         searchResultsTitleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
@@ -248,25 +272,34 @@ final class WLocMacMapViewController: NSViewController {
         searchResultsScroll.borderType = .noBorder
         searchResultsScroll.drawsBackground = false
 
-        appNameLabel.font = .systemFont(ofSize: 18, weight: .bold)
+        appNameLabel.font = .systemFont(ofSize: 18, weight: .semibold)
         versionLabel.font = .systemFont(ofSize: 11, weight: .medium)
         versionLabel.textColor = .secondaryLabelColor
+        configureIconButton(updateButton, symbol: "arrow.triangle.2.circlepath", label: "检查更新")
+        updateBadge.wantsLayer = true
+        updateBadge.layer?.cornerRadius = 3
+        updateBadge.layer?.backgroundColor = NSColor.systemBlue.cgColor
+        updateBadge.isHidden = true
+        updateButton.addSubview(updateBadge)
+        updateBadge.snp.makeConstraints { make in
+            make.top.trailing.equalToSuperview().inset(5)
+            make.width.height.equalTo(6)
+        }
         setUpdateButtonTitle("检查更新")
-        updateButton.isBordered = false
-        updateButton.font = .systemFont(ofSize: 11, weight: .semibold)
-        updateButton.wantsLayer = true
-        updateButton.layer?.cornerRadius = 9
-        updateButton.layer?.backgroundColor = NSColor(calibratedRed: 0.05, green: 0.45, blue: 0.96, alpha: 0.12).cgColor
-        updateButton.contentTintColor = NSColor(calibratedRed: 0.05, green: 0.45, blue: 0.96, alpha: 1)
         updateButton.target = self
         updateButton.action = #selector(openAvailableUpdate)
 
         titleLabel.font = .systemFont(ofSize: 22, weight: .semibold)
-        detailLabel.font = .systemFont(ofSize: 13)
+        titleLabel.maximumNumberOfLines = 2
+        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.cell?.wraps = true
+        detailLabel.font = .systemFont(ofSize: 12)
         detailLabel.textColor = .secondaryLabelColor
         detailLabel.maximumNumberOfLines = 2
+        detailLabel.lineBreakMode = .byWordWrapping
+        detailLabel.cell?.isScrollable = false
         detailLabel.cell?.wraps = true
-        coordinateLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        coordinateLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
         coordinateLabel.textColor = .secondaryLabelColor
         configureCopyMenu(for: titleLabel, field: .name)
         configureCopyMenu(for: detailLabel, field: .detail)
@@ -279,22 +312,23 @@ final class WLocMacMapViewController: NSViewController {
         favoriteMenu.addItem(deleteItem)
         favoritesTable.menu = favoriteMenu
 
-        [lockButton, advancedLockButton, restoreButton, favoriteButton, coordinateInputButton, tutorialButton, telegramButton, githubButton].forEach {
-            $0.bezelStyle = .rounded
-            $0.controlSize = .regular
-        }
-        telegramButton.image = WLocMacExternalIcon.image(named: "paperplane.fill", fallback: .telegram, size: NSSize(width: 14, height: 14))
-        telegramButton.toolTip = "打开 Telegram: https://t.me/wloc88"
-        githubButton.image = WLocMacExternalIcon.image(named: "chevron.left.forwardslash.chevron.right", fallback: .code, size: NSSize(width: 14, height: 14))
+        configureIconButton(advancedLockButton, symbol: "slider.horizontal.3", label: "高级锁定：设置海拔与定位精度")
+        configureIconButton(restoreButton, symbol: "arrow.counterclockwise", label: "还原定位")
+        configureIconButton(favoriteButton, symbol: "star", label: "加入收藏")
+        configureIconButton(coordinateInputButton, symbol: "scope", label: "输入经纬度选点")
+        configureIconButton(zoomInButton, symbol: "plus", label: "放大地图")
+        configureIconButton(zoomOutButton, symbol: "minus", label: "缩小地图")
+        configureIconButton(currentLocationButton, symbol: "location", label: "回到当前位置")
+        lockButton.image = NSImage(systemSymbolName: "lock.fill", accessibilityDescription: nil)
+        lockButton.font = .systemFont(ofSize: 14, weight: .semibold)
+        lockButton.layer?.shadowOpacity = 0
+        tutorialButton.image = NSImage(systemSymbolName: "book.closed", accessibilityDescription: nil)
+        tutorialButton.font = .systemFont(ofSize: 12, weight: .medium)
+        tutorialButton.toolTip = "使用教程、证书下载与安装说明"
+        telegramButton.image = WLocMacExternalIcon.image(named: "paperplane.fill", fallback: .telegram, size: NSSize(width: 17, height: 17))
+        telegramButton.toolTip = "加入 Telegram 社区：https://t.me/wloc88"
+        githubButton.image = WLocMacExternalIcon.image(named: "chevron.left.forwardslash.chevron.right", fallback: .code, size: NSSize(width: 17, height: 17))
         githubButton.toolTip = "查看 GitHub 开源项目，点个 Star 支持 WLoc8.com"
-        [zoomInButton, zoomOutButton, currentLocationButton].forEach { button in
-            if #available(macOS 26.0, *) {
-                button.bezelStyle = .glass
-            } else {
-                button.bezelStyle = .texturedRounded
-            }
-            button.font = .systemFont(ofSize: 18, weight: .semibold)
-        }
 
         restoreButton.target = self
         restoreButton.action = #selector(restoreLocation)
@@ -326,6 +360,7 @@ final class WLocMacMapViewController: NSViewController {
         }
     }
 
+    /// 搜索和收藏共用轻量列表样式，取消原来整块白底的表格感。
     private func configureTable(_ table: NSTableView) {
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("main"))
         column.title = ""
@@ -333,164 +368,252 @@ final class WLocMacMapViewController: NSViewController {
         table.addTableColumn(column)
         table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
         table.headerView = nil
-        table.rowHeight = 54
+        table.rowHeight = 64
+        table.style = .inset
+        table.intercellSpacing = NSSize(width: 0, height: 4)
         table.delegate = self
         table.dataSource = self
         table.selectionHighlightStyle = .regular
         table.backgroundColor = .clear
     }
 
-    /// 社区入口固定放在标题下方，收藏列表使用侧栏剩余空间。
+    /// 图标只省略视觉上的文字，保留按钮名称和鼠标提示。
+    private func configureIconButton(_ button: NSButton, symbol: String, label: String) {
+        button.title = label
+        button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 15, weight: .medium))
+        button.imagePosition = .imageOnly
+        button.toolTip = label
+        button.setAccessibilityLabel(label)
+        button.layer?.cornerRadius = 10
+    }
+
+    /// 浮动面板按内容决定高度，主操作独占一行，空收藏不再撑出整块留白。
     private func layoutViews() {
-        let sidebar = WLocMacGlassView(cornerRadius: 28)
-        let controlsPanel = WLocMacGlassView(cornerRadius: 8)
+        let sidebar = NSBox()
+        sidebar.boxType = .custom
+        sidebar.titlePosition = .noTitle
+        sidebar.contentViewMargins = .zero
+        sidebar.fillColor = .textBackgroundColor
+        sidebar.borderWidth = 0
+        sidebar.cornerRadius = 18
+        sidebar.wantsLayer = true
+        sidebar.layer?.shadowColor = NSColor.black.cgColor
+        sidebar.layer?.shadowOpacity = 0.13
+        sidebar.layer?.shadowRadius = 20
+        sidebar.layer?.shadowOffset = NSSize(width: 0, height: -8)
+        let controlsPanel = WLocMacGlassView(cornerRadius: 12, material: .popover)
         self.controlsPanel = controlsPanel
 
         view.addSubview(mapView)
         view.addSubview(sidebar)
         view.addSubview(controlsPanel)
         view.addSubview(searchResultsPanel, positioned: .above, relativeTo: nil)
-
-        searchResultsPanel.addSubview(searchResultsTitleLabel)
-        searchResultsPanel.addSubview(searchResultsScroll)
-
-        controlsPanel.contentView.addSubview(zoomInButton)
-        controlsPanel.contentView.addSubview(zoomOutButton)
-        controlsPanel.contentView.addSubview(currentLocationButton)
-
-        mapView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
-        }
+        mapView.snp.makeConstraints { make in make.edges.equalToSuperview() }
         sidebar.snp.makeConstraints { make in
-            make.leading.equalToSuperview().inset(24)
+            make.leading.equalToSuperview().inset(20)
             make.top.equalToSuperview().inset(64)
-            make.bottom.equalToSuperview().inset(24)
-            make.width.equalTo(408)
+            make.bottom.lessThanOrEqualToSuperview().inset(20)
+            make.width.equalTo(328)
         }
         controlsPanel.snp.makeConstraints { make in
             make.top.equalToSuperview().offset(72)
-            make.trailing.equalToSuperview().inset(28)
-            make.width.equalTo(54)
-            make.height.equalTo(164)
+            make.trailing.equalToSuperview().inset(24)
+            make.width.equalTo(44)
+            make.height.equalTo(120)
         }
-        
-        zoomInButton.snp.makeConstraints { make in
-            make.top.equalToSuperview().offset(8)
-            make.centerX.equalToSuperview()
-            make.width.height.equalTo(42)
+        [zoomInButton, zoomOutButton, currentLocationButton].forEach {
+            controlsPanel.contentView.addSubview($0)
+            $0.snp.makeConstraints { make in
+                make.centerX.equalToSuperview()
+                make.width.height.equalTo(32)
+            }
         }
-        zoomOutButton.snp.makeConstraints { make in
-            make.top.equalTo(zoomInButton.snp.bottom).offset(10)
-            make.centerX.equalToSuperview()
-            make.width.height.equalTo(zoomInButton)
+        zoomInButton.snp.makeConstraints { make in make.top.equalToSuperview().offset(8) }
+        zoomOutButton.snp.makeConstraints { make in make.top.equalTo(zoomInButton.snp.bottom).offset(4) }
+        currentLocationButton.snp.makeConstraints { make in make.top.equalTo(zoomOutButton.snp.bottom).offset(4) }
+
+        let header = NSView()
+        let brandIcon = NSImageView()
+        brandIcon.image = NSImage(systemSymbolName: "mappin.and.ellipse", accessibilityDescription: nil)
+        brandIcon.contentTintColor = NSColor(calibratedRed: 0.12, green: 0.36, blue: 0.94, alpha: 1)
+        brandIcon.imageScaling = .scaleProportionallyDown
+        brandIcon.setAccessibilityElement(false)
+        [brandIcon, appNameLabel, versionLabel, updateButton].forEach { header.addSubview($0) }
+        brandIcon.snp.makeConstraints { make in
+            make.leading.centerY.equalToSuperview()
+            make.width.height.equalTo(24)
         }
-        currentLocationButton.snp.makeConstraints { make in
-            make.top.equalTo(zoomOutButton.snp.bottom).offset(10)
-            make.centerX.equalToSuperview()
-            make.width.height.equalTo(zoomInButton)
+        appNameLabel.snp.makeConstraints { make in
+            make.top.equalToSuperview()
+            make.leading.equalTo(brandIcon.snp.trailing).offset(8)
+            make.trailing.lessThanOrEqualTo(updateButton.snp.leading).offset(-8)
         }
+        versionLabel.snp.makeConstraints { make in
+            make.leading.equalTo(appNameLabel)
+            make.top.equalTo(appNameLabel.snp.bottom).offset(1)
+            make.trailing.lessThanOrEqualTo(updateButton.snp.leading).offset(-8)
+        }
+        updateButton.snp.makeConstraints { make in
+            make.trailing.centerY.equalToSuperview()
+            make.width.height.equalTo(28)
+        }
+
+        let externalLinkStack = NSStackView(views: [telegramButton, githubButton])
+        externalLinkStack.orientation = .horizontal
+        externalLinkStack.spacing = 8
+        externalLinkStack.distribution = .fillEqually
+        [telegramButton, githubButton].forEach { button in
+            button.font = .systemFont(ofSize: 12, weight: .semibold)
+            button.snp.makeConstraints { make in make.height.equalTo(34) }
+        }
+        let selectionDivider = NSBox()
+        selectionDivider.boxType = .separator
+        let favoritesDivider = NSBox()
+        favoritesDivider.boxType = .separator
+        let selectionHeading = NSView()
+        selectionHeading.addSubview(titleLabel)
+        selectionHeading.addSubview(favoriteButton)
+        titleLabel.preferredMaxLayoutWidth = 254
+        titleLabel.snp.makeConstraints { make in
+            make.leading.top.bottom.equalToSuperview()
+            make.trailing.equalTo(favoriteButton.snp.leading).offset(-8)
+        }
+        favoriteButton.snp.makeConstraints { make in
+            make.trailing.equalToSuperview()
+            make.top.equalToSuperview().offset(-2)
+            make.width.height.equalTo(30)
+        }
+
+        let toolbar = NSStackView(views: [advancedLockButton, restoreButton, coordinateInputButton, NSView(), tutorialButton])
+        toolbar.orientation = .horizontal
+        toolbar.alignment = .centerY
+        toolbar.distribution = .fill
+        toolbar.spacing = 6
+        [advancedLockButton, restoreButton, coordinateInputButton].forEach { button in
+            button.snp.makeConstraints { make in make.width.height.equalTo(32) }
+        }
+        tutorialButton.snp.makeConstraints { make in
+            make.width.equalTo(136)
+            make.height.equalTo(32)
+        }
+        toolbar.views[3].setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         let favoriteTitle = NSTextField.wlocLabel("收藏地点")
-        favoriteTitle.font = .systemFont(ofSize: 13, weight: .semibold)
-        favoriteTitle.textColor = .secondaryLabelColor
+        favoriteTitle.font = .systemFont(ofSize: 12, weight: .semibold)
+        favoritesCountLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        favoritesCountLabel.textColor = .secondaryLabelColor
+        let favoritesHeading = NSView()
+        favoritesHeading.addSubview(favoriteTitle)
+        favoritesHeading.addSubview(favoritesCountLabel)
+        favoriteTitle.snp.makeConstraints { make in make.leading.centerY.equalToSuperview() }
+        favoritesCountLabel.snp.makeConstraints { make in make.trailing.centerY.equalToSuperview() }
 
+        let favoritesArea = NSView()
         let favoritesScroll = NSScrollView()
         favoritesScroll.documentView = favoritesTable
         favoritesScroll.hasVerticalScroller = true
         favoritesScroll.borderType = .noBorder
-
-        let actionStack = NSStackView(views: [lockButton, advancedLockButton, restoreButton])
-        actionStack.orientation = .horizontal
-        actionStack.spacing = 10
-        actionStack.distribution = .fillEqually
-
-        lockButton.bezelColor = .controlAccentColor
-        let selectionStack = NSStackView(views: [favoriteButton, coordinateInputButton])
-        selectionStack.orientation = .horizontal
-        selectionStack.spacing = 10
-        selectionStack.distribution = .fillEqually
-
-        let secondaryActionStack = NSStackView(views: [selectionStack, tutorialButton])
-        secondaryActionStack.orientation = .vertical
-        secondaryActionStack.spacing = 15
-        secondaryActionStack.distribution = .fillEqually
-
-        let externalLinkStack = NSStackView(views: [telegramButton, githubButton])
-        externalLinkStack.orientation = .horizontal
-        externalLinkStack.spacing = 10
-        externalLinkStack.distribution = .fillEqually
-        selectionStack.snp.makeConstraints { make in
-            make.width.equalTo(secondaryActionStack)
+        favoritesScroll.drawsBackground = false
+        favoritesScroll.autohidesScrollers = true
+        favoritesScroll.scrollerStyle = .overlay
+        favoritesArea.addSubview(favoritesScroll)
+        favoritesArea.addSubview(emptyFavoritesView)
+        favoritesScroll.snp.makeConstraints { make in make.edges.equalToSuperview() }
+        emptyFavoritesView.snp.makeConstraints { make in make.edges.equalToSuperview() }
+        let emptyIcon = NSImageView()
+        emptyIcon.image = NSImage(systemSymbolName: "star", accessibilityDescription: nil)
+        emptyIcon.contentTintColor = .secondaryLabelColor
+        emptyIcon.setAccessibilityElement(false)
+        emptyIcon.snp.makeConstraints { make in make.width.height.equalTo(22) }
+        let emptyTitle = NSTextField.wlocLabel("还没有收藏地点")
+        emptyTitle.font = .systemFont(ofSize: 12, weight: .medium)
+        let emptyHint = NSTextField.wlocLabel("点击星标，收藏常用地点")
+        emptyHint.font = .systemFont(ofSize: 11)
+        emptyHint.textColor = .secondaryLabelColor
+        let emptyText = NSStackView(views: [emptyTitle, emptyHint])
+        emptyText.orientation = .vertical
+        emptyText.alignment = .leading
+        emptyText.spacing = 3
+        let emptyStack = NSStackView(views: [emptyIcon, emptyText])
+        emptyStack.orientation = .horizontal
+        emptyStack.spacing = 10
+        emptyFavoritesView.addSubview(emptyStack)
+        emptyStack.snp.makeConstraints { make in
+            make.center.equalToSuperview()
+            make.leading.greaterThanOrEqualToSuperview().inset(8)
         }
 
-        [lockButton, advancedLockButton, restoreButton, favoriteButton, coordinateInputButton, tutorialButton].forEach { button in
-            button.snp.makeConstraints { make in
-                make.height.equalTo(36)
-            }
+        [header, searchField, externalLinkStack, selectionDivider, selectionHeading, detailLabel, coordinateLabel,
+         lockButton, toolbar, favoritesDivider, favoritesHeading, favoritesArea].forEach {
+            sidebar.contentView?.addSubview($0)
         }
-        [telegramButton, githubButton].forEach { button in
-            button.snp.makeConstraints { make in make.height.equalTo(30) }
-        }
-
-        [appNameLabel, versionLabel, updateButton, searchField, titleLabel, detailLabel, coordinateLabel, actionStack, secondaryActionStack, favoriteTitle, favoritesScroll, externalLinkStack].forEach {
-            sidebar.contentView.addSubview($0)
-        }
-
-        appNameLabel.snp.makeConstraints { make in
-            make.top.equalToSuperview().offset(20)
-            make.leading.equalToSuperview().inset(18)
-        }
-        versionLabel.snp.makeConstraints { make in
-            make.leading.equalTo(appNameLabel)
-            make.top.equalTo(appNameLabel.snp.bottom).offset(2)
-        }
-        updateButton.snp.makeConstraints { make in
-            make.centerY.equalTo(versionLabel)
-            make.leading.equalTo(versionLabel.snp.trailing).offset(6)
-            make.trailing.lessThanOrEqualToSuperview().inset(18)
-            make.height.equalTo(22)
-        }
-        searchField.snp.makeConstraints { make in
-            make.top.equalTo(externalLinkStack.snp.bottom).offset(14)
+        header.snp.makeConstraints { make in
+            make.top.equalToSuperview().inset(18)
             make.leading.trailing.equalToSuperview().inset(18)
             make.height.equalTo(36)
         }
-        titleLabel.snp.makeConstraints { make in
-            make.top.equalTo(searchField.snp.bottom).offset(18)
-            make.leading.trailing.equalTo(searchField)
-        }
-        detailLabel.snp.makeConstraints { make in
-            make.top.equalTo(titleLabel.snp.bottom).offset(8)
-            make.leading.trailing.equalTo(searchField)
-        }
-        coordinateLabel.snp.makeConstraints { make in
-            make.top.equalTo(detailLabel.snp.bottom).offset(8)
-            make.leading.trailing.equalTo(searchField)
-        }
-        actionStack.snp.makeConstraints { make in
-            make.top.equalTo(coordinateLabel.snp.bottom).offset(16)
-            make.leading.trailing.equalTo(searchField)
-        }
-        secondaryActionStack.snp.makeConstraints { make in
-            make.top.equalTo(actionStack.snp.bottom).offset(10)
-            make.leading.trailing.equalTo(searchField)
-        }
-        favoriteTitle.snp.makeConstraints { make in
-            make.top.equalTo(secondaryActionStack.snp.bottom).offset(20)
-            make.leading.trailing.equalTo(searchField)
-        }
-        favoritesScroll.snp.makeConstraints { make in
-            make.top.equalTo(favoriteTitle.snp.bottom).offset(8)
-            make.leading.trailing.equalTo(searchField)
-            make.bottom.equalToSuperview().inset(18)
+        searchField.snp.makeConstraints { make in
+            make.top.equalTo(header.snp.bottom).offset(12)
+            make.leading.trailing.equalTo(header)
+            make.height.equalTo(32)
         }
         externalLinkStack.snp.makeConstraints { make in
-            make.leading.trailing.equalTo(searchField)
-            make.top.equalTo(versionLabel.snp.bottom).offset(14)
+            make.top.equalTo(searchField.snp.bottom).offset(12)
+            make.leading.trailing.equalTo(header)
+        }
+        selectionDivider.snp.makeConstraints { make in
+            make.top.equalTo(externalLinkStack.snp.bottom).offset(18)
+            make.leading.trailing.equalTo(header)
+            make.height.equalTo(1)
+        }
+        selectionHeading.snp.makeConstraints { make in
+            make.top.equalTo(selectionDivider.snp.bottom).offset(16)
+            make.leading.trailing.equalTo(header)
+            make.height.greaterThanOrEqualTo(28)
+        }
+        detailLabel.snp.makeConstraints { make in
+            make.top.equalTo(selectionHeading.snp.bottom).offset(6)
+            make.leading.trailing.equalTo(header)
+            make.height.lessThanOrEqualTo(32)
+        }
+        detailLabel.preferredMaxLayoutWidth = 292
+        coordinateLabel.snp.makeConstraints { make in
+            make.top.equalTo(detailLabel.snp.bottom).offset(8)
+            make.leading.trailing.equalTo(header)
+        }
+        lockButton.snp.makeConstraints { make in
+            make.top.equalTo(coordinateLabel.snp.bottom).offset(18)
+            make.leading.trailing.equalTo(header)
+            make.height.equalTo(42)
+        }
+        toolbar.snp.makeConstraints { make in
+            make.top.equalTo(lockButton.snp.bottom).offset(8)
+            make.leading.trailing.equalTo(header)
+            make.height.equalTo(32)
+        }
+        favoritesDivider.snp.makeConstraints { make in
+            make.top.equalTo(toolbar.snp.bottom).offset(16)
+            make.leading.trailing.equalTo(header)
+            make.height.equalTo(1)
+        }
+        favoritesHeading.snp.makeConstraints { make in
+            make.top.equalTo(favoritesDivider.snp.bottom).offset(14)
+            make.leading.trailing.equalTo(header)
+            make.height.equalTo(18)
+        }
+        favoritesArea.snp.makeConstraints { make in
+            make.top.equalTo(favoritesHeading.snp.bottom).offset(8)
+            make.leading.trailing.equalTo(header)
+            make.bottom.equalToSuperview().inset(16)
+            make.height.greaterThanOrEqualTo(44)
+            favoritesHeightConstraint = make.height.equalTo(60).priority(750).constraint
         }
 
+        searchResultsPanel.addSubview(searchResultsTitleLabel)
+        searchResultsPanel.addSubview(searchResultsScroll)
         searchResultsPanel.snp.makeConstraints { make in
-            make.top.equalTo(searchField.snp.bottom).offset(8)
+            make.top.equalTo(searchField.snp.bottom).offset(6)
             make.leading.trailing.equalTo(searchField)
             make.height.equalTo(270)
         }
@@ -504,13 +627,21 @@ final class WLocMacMapViewController: NSViewController {
         }
     }
 
+    /// 更新目标信息，同时让星标反映收藏状态，完整地址仍可通过鼠标提示查看。
     private func updateSelectedPlace(_ place: AppWLocPlace) {
         selectedPlace = place
         titleLabel.stringValue = place.name
         detailLabel.stringValue = place.detail
         coordinateLabel.stringValue = place.coordinateText
+        titleLabel.toolTip = place.name
+        detailLabel.toolTip = place.detail
         favoriteButton.isEnabled = !AppWLocFavoriteStore.shared.contains(place)
+        favoriteButton.stateTintColor = favoriteButton.isEnabled ? nil : NSColor(calibratedRed: 0.7, green: 0.42, blue: 0.04, alpha: 1)
         favoriteButton.title = favoriteButton.isEnabled ? "加入收藏" : "已收藏"
+        favoriteButton.image = NSImage(systemSymbolName: favoriteButton.isEnabled ? "star" : "star.fill", accessibilityDescription: nil)
+        favoriteButton.imagePosition = .imageOnly
+        favoriteButton.toolTip = favoriteButton.title
+        favoriteButton.setAccessibilityLabel(favoriteButton.title)
     }
 
     private func configureCopyMenu(for label: NSTextField, field: SelectedCopyField) {
@@ -644,9 +775,14 @@ final class WLocMacMapViewController: NSViewController {
         }
     }
 
+    /// 收藏数量和空状态跟随列表更新，空列表也有明确的操作指引。
     private func reloadFavorites() {
         favorites = AppWLocFavoriteStore.shared.all()
         favoritesTable.reloadData()
+        favoritesCountLabel.stringValue = "\(favorites.count) 个"
+        emptyFavoritesView.isHidden = !favorites.isEmpty
+        let listHeight = CGFloat(favorites.count) * (favoritesTable.rowHeight + favoritesTable.intercellSpacing.height) + 8
+        favoritesHeightConstraint?.update(offset: favorites.isEmpty ? 60 : min(listHeight, 208))
     }
 
     @objc private func lockCurrentPlace() {
@@ -757,6 +893,7 @@ final class WLocMacMapViewController: NSViewController {
         lockButton.isEnabled = false
         advancedLockButton.isEnabled = false
         restoreButton.title = "还原中…"
+        restoreButton.imagePosition = .imageOnly
 
         pacManager.stop(clearState: true) { [weak self] error in
             guard let self else { return }
@@ -766,9 +903,11 @@ final class WLocMacMapViewController: NSViewController {
             self.advancedLockButton.isEnabled = true
             if let error {
                 self.restoreButton.title = "重试恢复"
+                self.restoreButton.imagePosition = .imageOnly
                 self.showAlert(title: "恢复失败", message: "原代理设置尚未全部恢复，请重试。\n\n\(error.localizedDescription)")
             } else {
                 self.restoreButton.title = "还原定位"
+                self.restoreButton.imagePosition = .imageOnly
                 self.showAlert(title: "还原定位", message: "已恢复原代理设置。若连接了 VPN，请先关闭 VPN。然后前往“系统设置 → 隐私与安全性 → 定位服务”，关闭定位服务，等待 2 秒后重新开启，以刷新实际位置。")
             }
         }
@@ -801,18 +940,13 @@ final class WLocMacMapViewController: NSViewController {
         lock(place, successMessage: "已通过外部链接保存目标位置并启用 PAC 代理。")
     }
 
+    /// 选中坐标即可收藏，无需等待详细地址解析完成。
     @objc private func addFavorite() {
         guard let place = selectedPlace else { return }
-        let savedDetail = place.detail.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !savedDetail.isEmpty,
-              place.name != "查询中...",
-              savedDetail != "单击地图可选择新的位置" else {
-            showAlert(title: "地址尚未获取", message: "请等待详细地址显示后再加入收藏。")
-            return
-        }
+        let favorite = AppWLocFavorite(place: place, alias: "")
         let alert = NSAlert()
         alert.messageText = "加入收藏"
-        alert.informativeText = "地点：\(place.name)\n地址：\(savedDetail)\n坐标：\(place.coordinateText)"
+        alert.informativeText = "地点：\(favorite.title)\n地址：\(favorite.detail)\n坐标：\(favorite.coordinateText)"
         alert.addButton(withTitle: "保存")
         alert.addButton(withTitle: "取消")
 
@@ -900,8 +1034,7 @@ final class WLocMacMapViewController: NSViewController {
         guard favorites.indices.contains(row) else { return }
         let favorite = favorites[row]
         let alert = NSAlert()
-        let favoriteName = favorite.alias.isEmpty ? favorite.title : favorite.alias
-        alert.messageText = "删除“\(favoriteName)”？"
+        alert.messageText = "删除“\(favorite.displayName)”？"
         alert.informativeText = "删除后无法撤销。"
         alert.addButton(withTitle: "删除")
         alert.addButton(withTitle: "取消")
@@ -960,11 +1093,13 @@ final class WLocMacMapViewController: NSViewController {
         }
     }
 
+    /// 更新入口只显示图标，新版本用圆点提示，完整含义留在鼠标提示和无障碍名称里。
     private func setUpdateButtonTitle(_ title: String) {
-        updateButton.attributedTitle = NSAttributedString(string: title, attributes: [
-            .foregroundColor: NSColor(calibratedRed: 0.05, green: 0.45, blue: 0.96, alpha: 1),
-            .font: NSFont.systemFont(ofSize: 11, weight: .semibold)
-        ])
+        updateButton.title = title
+        updateButton.imagePosition = .imageOnly
+        updateButton.toolTip = title
+        updateButton.setAccessibilityLabel(title)
+        updateBadge.isHidden = availableUpdate == nil
     }
 
     private func presentAvailableUpdate(_ update: AppWLocAvailableUpdate) {
@@ -1441,28 +1576,27 @@ extension WLocMacMapViewController: NSTableViewDataSource, NSTableViewDelegate {
         tableView == searchTable ? searchResults.count : favorites.count
     }
 
+    /// 两端使用相同的收藏文字规则，缺少名称或地址时收起对应行。
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         let identifier = NSUserInterfaceItemIdentifier("cell")
-        let textField = tableView.makeView(withIdentifier: identifier, owner: self) as? NSTextField ?? NSTextField.wlocLabel("")
-        textField.identifier = identifier
-        textField.lineBreakMode = .byTruncatingTail
+        let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? WLocMacPlaceCell ?? WLocMacPlaceCell()
+        cell.identifier = identifier
         if tableView == searchTable {
-            textField.maximumNumberOfLines = 2
-            textField.font = .systemFont(ofSize: 13)
             let item = searchResults[row]
-            textField.stringValue = item.detail.isEmpty ? item.name : "\(item.name)\n\(item.detail)"
+            cell.configure(name: item.name, detail: item.detail, coordinate: "", isFavorite: false)
+            cell.toolTip = item.detail.isEmpty ? item.name : "\(item.name)\n\(item.detail)"
         } else {
-            textField.maximumNumberOfLines = 4
-            textField.font = .systemFont(ofSize: 12)
             let favorite = favorites[row]
-            textField.stringValue = [
-                "别名：\(favorite.displayAlias)",
-                "地点：\(favorite.title)",
-                "地址：\(favorite.displayDetail)",
-                "坐标：\(favorite.coordinateText)"
-            ].joined(separator: "\n")
+            let coordinate = favorite.displayAlias.isEmpty && favorite.displayTitle.isEmpty ? "" : favorite.coordinateText
+            cell.configure(name: favorite.displayName, detail: favorite.displaySubtitle, coordinate: coordinate, isFavorite: true)
+            cell.toolTip = [favorite.displayName, favorite.displaySubtitle, coordinate]
+                .filter { !$0.isEmpty }.joined(separator: "\n")
         }
-        return textField
+        return cell
+    }
+
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        tableView == favoritesTable ? WLocMacFavoriteRowView() : nil
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {
@@ -1515,6 +1649,112 @@ extension WLocMacMapViewController: CLLocationManagerDelegate {
         if shouldShowError {
             showAlert(title: "定位失败", message: error.localizedDescription)
         }
+    }
+}
+
+private final class WLocMacPlaceCell: NSTableCellView {
+    let nameLabel = NSTextField.wlocLabel("")
+    let detailLabel = NSTextField.wlocLabel("")
+    let coordinateLabel = NSTextField.wlocLabel("")
+    private let pinView = NSImageView()
+    private let iconBackground = NSView()
+
+    /// 搜索和收藏共用地点图标与分层文字，长地址截断后仍可通过鼠标查看全文。
+    init() {
+        super.init(frame: .zero)
+        textField = nameLabel
+        imageView = pinView
+        pinView.contentTintColor = .controlAccentColor
+        pinView.imageScaling = .scaleProportionallyDown
+        pinView.setAccessibilityElement(false)
+        nameLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        detailLabel.font = .systemFont(ofSize: 11)
+        detailLabel.textColor = .secondaryLabelColor
+        coordinateLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
+        coordinateLabel.textColor = .secondaryLabelColor
+        let textStack = NSStackView(views: [nameLabel, detailLabel, coordinateLabel])
+        textStack.orientation = .vertical
+        textStack.alignment = .leading
+        textStack.spacing = 4
+        [nameLabel, detailLabel, coordinateLabel].forEach { label in
+            label.maximumNumberOfLines = 1
+            label.lineBreakMode = .byTruncatingTail
+            label.snp.makeConstraints { make in make.width.equalTo(textStack) }
+        }
+        iconBackground.wantsLayer = true
+        iconBackground.layer?.cornerRadius = 9
+        addSubview(iconBackground)
+        iconBackground.addSubview(pinView)
+        addSubview(textStack)
+        iconBackground.snp.makeConstraints { make in
+            make.leading.equalToSuperview().inset(12)
+            make.centerY.equalToSuperview()
+            make.width.height.equalTo(32)
+        }
+        pinView.snp.makeConstraints { make in
+            make.centerY.equalToSuperview()
+            make.centerX.equalToSuperview()
+            make.width.height.equalTo(17)
+        }
+        textStack.snp.makeConstraints { make in
+            make.centerY.equalToSuperview()
+            make.leading.equalTo(iconBackground.snp.trailing).offset(10)
+            make.trailing.equalToSuperview().inset(12)
+        }
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    /// 搜索仍显示定位图标，收藏改用淡蓝星标；空文字行不占据布局空间。
+    func configure(name: String, detail: String, coordinate: String, isFavorite: Bool) {
+        nameLabel.stringValue = name
+        detailLabel.stringValue = detail
+        coordinateLabel.stringValue = coordinate
+        detailLabel.isHidden = detail.isEmpty
+        coordinateLabel.isHidden = coordinate.isEmpty
+        pinView.image = NSImage(systemSymbolName: isFavorite ? "star.fill" : "mappin", accessibilityDescription: nil)
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            iconBackground.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.09).cgColor
+        }
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            iconBackground.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.09).cgColor
+        }
+    }
+
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet {
+            let selected = backgroundStyle == .emphasized
+            nameLabel.textColor = selected ? .white : .labelColor
+            detailLabel.textColor = selected ? NSColor.white.withAlphaComponent(0.85) : .secondaryLabelColor
+            coordinateLabel.textColor = selected ? NSColor.white.withAlphaComponent(0.85) : .secondaryLabelColor
+            pinView.contentTintColor = selected ? .white : .controlAccentColor
+        }
+    }
+}
+
+private final class WLocMacFavoriteRowView: NSTableRowView {
+    override var interiorBackgroundStyle: NSView.BackgroundStyle { .normal }
+
+    override func drawBackground(in dirtyRect: NSRect) {
+        drawCard(selected: false)
+    }
+
+    override func drawSelection(in dirtyRect: NSRect) {
+        drawCard(selected: true)
+    }
+
+    /// 浅色圆角底区分每条收藏，选中时使用淡蓝底和细描边。
+    private func drawCard(selected: Bool) {
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 3), xRadius: 10, yRadius: 10)
+        (selected ? NSColor.controlAccentColor.withAlphaComponent(0.1) : .controlBackgroundColor).setFill()
+        path.fill()
+        (selected ? NSColor.controlAccentColor.withAlphaComponent(0.35) : NSColor.separatorColor.withAlphaComponent(0.25)).setStroke()
+        path.lineWidth = 0.5
+        path.stroke()
     }
 }
 

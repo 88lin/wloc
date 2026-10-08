@@ -92,22 +92,24 @@ struct AppWLocFavorite: Codable, Equatable {
         self.createdAt = createdAt
     }
 
+    /// 收藏只保存实际地点信息，查询状态和引导文案不作为名称、地址保存。
     init(place: AppWLocPlace, alias: String) {
-        let title = place.name.trimmingCharacters(in: .whitespacesAndNewlines)
         self.init(
             alias: alias.trimmingCharacters(in: .whitespacesAndNewlines),
-            title: title.isEmpty ? "未命名地点" : title,
+            title: place.name.trimmingCharacters(in: .whitespacesAndNewlines),
             detail: place.detail.trimmingCharacters(in: .whitespacesAndNewlines),
             latitude: place.latitude,
             longitude: place.longitude
         )
+        title = displayTitle
+        detail = displayDetail
     }
 
     var place: AppWLocPlace {
         AppWLocPlace(
             id: id,
-            name: title,
-            detail: detail,
+            name: displayTitle,
+            detail: displayDetail,
             latitude: latitude,
             longitude: longitude,
             createdAt: createdAt
@@ -115,11 +117,30 @@ struct AppWLocFavorite: Codable, Equatable {
     }
 
     var displayAlias: String {
-        alias.isEmpty ? "未设置" : alias
+        alias.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// 两端共用名称规则，不把查询状态或坐标选点提示展示成地点名称。
+    var displayTitle: String {
+        let value = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ["查询中...", "查询中…", "自定义位置", "经纬度位置", "未命名地点"].contains(value) ? "" : value
+    }
+
+    /// 没有实际地址时保持为空，列表和收藏弹窗均不补占位文案。
     var displayDetail: String {
-        detail.isEmpty ? "暂无详细地址" : detail
+        let value = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ["暂无详细地址", "单击地图可选择新的位置"].contains(value) ? "" : value
+    }
+
+    var displayName: String {
+        if !displayAlias.isEmpty { return displayAlias }
+        return displayTitle.isEmpty ? coordinateText : displayTitle
+    }
+
+    var displaySubtitle: String {
+        [displayAlias.isEmpty ? "" : displayTitle, displayDetail]
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
     }
 
     var coordinateText: String {
