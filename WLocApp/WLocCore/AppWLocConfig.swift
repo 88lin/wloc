@@ -101,7 +101,7 @@ enum AppWLocConfig {
     static let certificateServerPort: UInt = 18088
     #if os(macOS)
     static let pacServerPort: UInt = 18089
-    static let pacURL = URL(string: "http://127.0.0.1:\(pacServerPort)/wloc.pac")!
+    static let pacPath = "/wloc.pac"
     #endif
 
     static let iOSWLocHosts: Set<String> = [

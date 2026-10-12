@@ -7,6 +7,7 @@ private final class AppWLocPrivilegedHelper: NSObject, AppWLocPrivilegedHelperPr
         reply(nil)
     }
     
+    /// 先校验整批配置，再修改网络设置，避免把空地址或不完整地址交给 networksetup。
     func applyPACSettings(_ data: Data, withReply reply: @escaping (String?) -> Void) {
         defer {
             DispatchQueue.global().asyncAfter(deadline: .now() + 2) {
@@ -15,7 +16,8 @@ private final class AppWLocPrivilegedHelper: NSObject, AppWLocPrivilegedHelperPr
         }
         do {
             let settings = try JSONDecoder().decode([AppWLocPACNetworkSetting].self, from: data)
-            guard !settings.isEmpty, settings.allSatisfy({ !$0.service.isEmpty }) else {
+                .map { try $0.validated() }
+            guard !settings.isEmpty else {
                 throw NSError(domain: AppWLocPrivilegedHelperConstants.machServiceName, code: 1,
                               userInfo: [NSLocalizedDescriptionKey: "无效的 PAC 配置"])
             }

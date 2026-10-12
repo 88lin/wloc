@@ -9,7 +9,11 @@ enum AppWLocPACError: Error, LocalizedError {
     case helperNotFound
     case helperFailed(String)
     case commandFailed(String)
+    case pacServerUnavailable
+    case invalidPACPort
+    case invalidPACURL
 
+    /// 把服务启动和代理配置失败转换成可直接展示的提示。
     var errorDescription: String? {
         switch self {
         case .noNetworkService:
@@ -22,6 +26,12 @@ enum AppWLocPACError: Error, LocalizedError {
             return message.isEmpty ? "Privileged Helper 启动失败" : "Privileged Helper 启动失败：\(message)"
         case .commandFailed(let message):
             return message.isEmpty ? "自动代理配置失败" : "自动代理配置失败：\(message)"
+        case .pacServerUnavailable:
+            return "本地 PAC 服务未成功启动"
+        case .invalidPACPort:
+            return "本地 PAC 服务的监听端口无效"
+        case .invalidPACURL:
+            return "无法生成有效的本地 PAC URL"
         }
     }
 }
@@ -92,6 +102,7 @@ final class AppWLocPACManager {
         }
     }
 
+    /// 保存原代理设置，启动本地服务，并确认实际监听地址有效后再启用系统 PAC。
     private func start() throws {
         try ensureHelper()
 
@@ -114,7 +125,7 @@ final class AppWLocPACManager {
             let enabled = lines.first { $0.hasPrefix("Enabled:") }?
                 .lowercased().contains("yes") == true
             previousSettings[service] = SavedPACSetting(
-                url: value == nil || value == "(null)" ? nil : value,
+                url: value?.isEmpty == false && value != "(null)" ? value : nil,
                 enabled: enabled
             )
         }
@@ -133,7 +144,7 @@ final class AppWLocPACManager {
                 return "\(fallbackPACReturn)";
             }
             """
-            pacServer.addHandler(forMethod: "GET", path: "/wloc.pac", request: GCDWebServerRequest.self) { _ in
+            pacServer.addHandler(forMethod: "GET", path: AppWLocConfig.pacPath, request: GCDWebServerRequest.self) { _ in
                 GCDWebServerDataResponse(
                     data: Data(script.utf8),
                     contentType: "application/x-ns-proxy-autoconfig"
@@ -143,12 +154,23 @@ final class AppWLocPACManager {
                 GCDWebServerOption_Port: AppWLocConfig.pacServerPort,
                 GCDWebServerOption_BindToLocalhost: true
             ])
+            AppWLocUtils.debugLog(
+                "\(AppWLocConfig.displayName) PAC server running=\(pacServer.isRunning) port=\(pacServer.port) serverURL=\(pacServer.serverURL?.absoluteString ?? "nil")"
+            )
+            guard pacServer.isRunning else { throw AppWLocPACError.pacServerUnavailable }
+            let port = pacServer.port
+            guard port > 0, port <= 65535 else { throw AppWLocPACError.invalidPACPort }
+            // serverURL 可能为空，用服务实际监听端口和 loopback 地址生成 PAC URL。
+            guard let pacURL = URL(string: "http://\(AppWLocConfig.localProxyHost):\(port)\(AppWLocConfig.pacPath)") else {
+                throw AppWLocPACError.invalidPACURL
+            }
+            AppWLocUtils.debugLog("\(AppWLocConfig.displayName) PAC URL = \(pacURL.absoluteString)")
 
             try setPAC(services.map {
-                AppWLocPACNetworkSetting(service: $0, url: AppWLocConfig.pacURL.absoluteString, enabled: true)
+                AppWLocPACNetworkSetting(service: $0, url: pacURL.absoluteString, enabled: true)
             })
             isRunning = true
-            AppWLocUtils.debugLog("\(AppWLocConfig.displayName) PAC 已启用：\(AppWLocConfig.pacURL.absoluteString)")
+            AppWLocUtils.debugLog("\(AppWLocConfig.displayName) PAC 已启用：\(pacURL.absoluteString)")
         } catch {
             _ = stop()
             throw error
@@ -177,6 +199,7 @@ final class AppWLocPACManager {
         previousSettings = try JSONDecoder().decode([String: SavedPACSetting].self, from: data)
     }
 
+    /// 恢复原来的 PAC 状态；原地址为空时只恢复开关，不把空字符串交给 Helper。
     @discardableResult
     private func restorePAC(_ settings: [String: SavedPACSetting]) -> Error? {
         guard !settings.isEmpty else { return nil }
@@ -184,9 +207,10 @@ final class AppWLocPACManager {
         var remaining = settings
         for (service, setting) in settings {
             do {
+                let url = setting.url?.trimmingCharacters(in: .whitespacesAndNewlines)
                 try setPAC([AppWLocPACNetworkSetting(
                     service: service,
-                    url: setting.url,
+                    url: url?.isEmpty == false ? url : nil,
                     enabled: setting.enabled
                 )])
                 remaining.removeValue(forKey: service)
@@ -388,8 +412,10 @@ final class AppWLocPACManager {
     }
     
     
+    /// 在建立 XPC 连接前校验配置，让无效 PAC 地址直接在主程序报错。
     private func setPAC(_ settings: [AppWLocPACNetworkSetting]) throws {
         guard !settings.isEmpty else { return }
+        let settings = try settings.map { try $0.validated() }
         let connection = NSXPCConnection(
             machServiceName: AppWLocPrivilegedHelperConstants.machServiceName,
             options: .privileged

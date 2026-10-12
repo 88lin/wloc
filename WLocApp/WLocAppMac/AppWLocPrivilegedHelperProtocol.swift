@@ -51,6 +51,32 @@ struct AppWLocPACNetworkSetting: Codable {
     let service: String
     let url: String?
     let enabled: Bool
+
+    /// 主程序和 Helper 共用校验，关闭 PAC 时允许没有 URL，有 URL 时必须是完整的 HTTP/HTTPS 地址。
+    func validated() throws -> AppWLocPACNetworkSetting {
+        guard !service.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw NSError(domain: AppWLocPrivilegedHelperConstants.machServiceName, code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "无效的 PAC 网络服务"])
+        }
+        guard let url else {
+            guard !enabled else {
+                throw NSError(domain: AppWLocPrivilegedHelperConstants.machServiceName, code: 1,
+                              userInfo: [NSLocalizedDescriptionKey: "\(service)：启用 PAC 时缺少 URL"])
+            }
+            return self
+        }
+
+        let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedURL.isEmpty,
+              let parsedURL = URL(string: trimmedURL),
+              let scheme = parsedURL.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              let host = parsedURL.host, !host.isEmpty else {
+            throw NSError(domain: AppWLocPrivilegedHelperConstants.machServiceName, code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "\(service)：无效的 PAC URL，需要完整的 HTTP/HTTPS 地址"])
+        }
+        return AppWLocPACNetworkSetting(service: service, url: trimmedURL, enabled: enabled)
+    }
 }
 
 @objc protocol AppWLocPrivilegedHelperProtocol {
